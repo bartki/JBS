@@ -1,0 +1,114 @@
+CREATE OR REPLACE PACKAGE BODY jg_obop_def
+IS
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION rt (p_object_id     IN jg_observed_operations.object_id%TYPE,
+                 p_object_type   IN jg_observed_operations.object_type%TYPE)
+        RETURN jg_observed_operations%ROWTYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_operation (
+            pc_object_id      jg_observed_operations.object_id%TYPE,
+            pc_object_type    jg_observed_operations.object_type%TYPE)
+        IS
+            SELECT obop.*
+              FROM jg_observed_operations obop
+             WHERE     obop.object_id = pc_object_id
+                   AND obop.object_type = pc_object_type;
+
+        r_obop   jg_observed_operations%ROWTYPE;
+    BEGIN
+        OPEN c_operation (p_object_id, p_object_type);
+
+        FETCH c_operation INTO r_obop;
+
+        CLOSE c_operation;
+
+        RETURN r_obop;
+    END;
+
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION exist_operation (
+        p_object_id     IN jg_observed_operations.object_id%TYPE,
+        p_object_type   IN jg_observed_operations.object_type%TYPE)
+        RETURN BOOLEAN
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_operation (
+            pc_object_id      jg_observed_operations.object_id%TYPE,
+            pc_object_type    jg_observed_operations.object_type%TYPE)
+        IS
+            SELECT obop.id
+              FROM jg_observed_operations obop
+             WHERE     obop.object_id = pc_object_id
+                   AND obop.object_type = pc_object_type;
+
+        v_obop_id   jg_observed_operations.id%TYPE;
+    BEGIN
+        OPEN c_operation (p_object_id, p_object_type);
+
+        FETCH c_operation INTO v_obop_id;
+
+        IF c_operation%FOUND
+        THEN
+            CLOSE c_operation;
+
+            RETURN TRUE;
+        END IF;
+
+        CLOSE c_operation;
+
+        RETURN FALSE;
+    END;
+
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE add_operation (
+        p_object_id        IN jg_observed_operations.object_id%TYPE,
+        p_object_type      IN jg_observed_operations.object_type%TYPE,
+        p_operation_type   IN jg_observed_operations.operation_type%TYPE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        r_obop   jg_observed_operations%ROWTYPE;
+    BEGIN
+        IF p_object_id IS NOT NULL
+        THEN
+            r_obop := rt (p_object_id, p_object_type);
+            set_log (r_obop.id);
+
+            IF r_obop.id IS NULL
+            THEN
+                set_log (
+                       'dodajemy '
+                    || p_object_type
+                    || '#'
+                    || p_object_id
+                    || '#'
+                    || p_operation_type);
+
+                INSERT INTO jg_observed_operations (id,
+                                                    object_type,
+                                                    object_id,
+                                                    operation_type)
+                     VALUES (jg_obop_seq.NEXTVAL,
+                             p_object_type,
+                             p_object_id,
+                             p_operation_type);
+            ELSE
+                set_log (
+                       'usuwamy '
+                    || p_object_type
+                    || '#'
+                    || p_object_id
+                    || '#'
+                    || p_operation_type);
+
+                IF p_operation_type = 'DELETE'
+                THEN
+                    DELETE FROM jg_observed_operations
+                          WHERE id = r_obop.id;
+                END IF;
+            END IF;
+        END IF;
+    END;
+------------------------------------------------------------------------------------------------------------------------
+END;
+/
