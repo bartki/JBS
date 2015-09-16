@@ -1,0 +1,14 @@
+CREATE OR REPLACE PACKAGE JG_FTP_CONFIGURATION IS
+------------------------------------------------------------------------------------------------------------------------
+  
+    sf_ftp_host                  VARCHAR2(30) := '193.202.117.201';
+    sf_ftp_user                  VARCHAR2(30) := 'jbs';
+    sf_ftp_password              VARCHAR2(30) := '****';
+    sf_ftp_port                  PLS_INTEGER  := 21;    
+    
+    sf_ftp_out_folder            VARCHAR2(30) := 'OUT';
+    sf_ftp_out_archive_folder    VARCHAR2(30) := 'OUT/Archive';
+    
+------------------------------------------------------------------------------------------------------------------------
+END;
+/
