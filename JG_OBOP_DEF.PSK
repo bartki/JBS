@@ -1,0 +1,10 @@
+CREATE OR REPLACE PACKAGE jg_obop_def
+IS
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE add_operation (
+        p_object_id        IN jg_observed_operations.object_id%TYPE,
+        p_object_type      IN jg_observed_operations.object_type%TYPE,
+        p_operation_type   IN jg_observed_operations.operation_type%TYPE);
+------------------------------------------------------------------------------------------------------------------------
+END;
+/
