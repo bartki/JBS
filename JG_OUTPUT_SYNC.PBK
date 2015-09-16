@@ -1,0 +1,234 @@
+CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
+------------------------------------------------------------------------------------------------------------------------
+    FUNCTION get_query_from_sql_repository(
+        p_object_type                     IN      jg_sql_repository.object_type%TYPE,
+        po_xslt                           OUT     jg_sql_repository.xslt%TYPE,
+        po_batch_guid                     OUT     jg_observed_operations.batch_guid%TYPE)
+        RETURN jg_sql_repository.sql_query%TYPE IS
+------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_sql_query(
+            pc_object_type                jg_sql_repository.object_type%TYPE) IS
+            SELECT sql_query, xslt
+              FROM jg_sql_repository
+             WHERE object_type = pc_object_type;
+  
+        v_sql_query jg_sql_repository.sql_query%TYPE;
+    BEGIN
+         OPEN c_sql_query(p_object_type);  
+        FETCH c_sql_query
+         INTO v_sql_query, po_xslt;  
+        CLOSE c_sql_query;
+  
+        IF v_sql_query IS NULL
+        THEN
+            assert(FALSE, 'Brak zdefiniowanego zapytania dla obiektu o typie ''' || p_object_type || '');
+        ELSE
+            po_batch_guid := SYS_GUID();
+    
+            UPDATE jg_observed_operations
+               SET batch_guid = po_batch_guid
+             WHERE object_type = p_object_type;
+    
+            v_sql_query := REPLACE(v_sql_query, ':p_id',
+                             'SELECT object_id FROM jg_observed_operations WHERE batch_guid = ''' ||
+                             po_batch_guid || '''');
+        END IF;
+  
+        RETURN v_sql_query;
+    END;
+
+------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE save_result(
+        p_object_type                     IN      jg_output_log.object_type%TYPE,
+        p_batch_guid                      IN      jg_observed_operations.batch_guid%TYPE,
+        p_xml                             IN      jg_output_log.xml%TYPE,
+        p_status                          IN      jg_output_log.status%TYPE,
+        p_error                           IN      jg_output_log.error%TYPE DEFAULT NULL ) IS
+------------------------------------------------------------------------------------------------------------------------
+    BEGIN
+        INSERT INTO jg_output_log (id, object_type, status, xml, error, guid)
+            VALUES (jg_oulo_seq.NEXTVAL, p_object_type, p_status, p_xml, p_error, p_batch_guid);
+    END;
+
+------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE save_result(
+        p_guid                            IN      jg_output_log.guid%TYPE,
+        p_status                          IN      jg_output_log.status%TYPE,
+        p_file_name                       IN      jg_output_log.file_name%TYPE DEFAULT NULL,
+        p_error                           IN      jg_output_log.error%TYPE DEFAULT NULL) IS
+------------------------------------------------------------------------------------------------------------------------
+    BEGIN
+        UPDATE jg_output_log oulo
+           SET oulo.status    = p_status,
+               oulo.file_name = p_file_name,
+               oulo.error     = p_error
+         WHERE oulo.guid = p_guid;
+    END;
+
+------------------------------------------------------------------------------------------------------------------------
+    FUNCTION create_xml(
+        p_sql_query                       IN      jg_sql_repository.sql_query%TYPE,
+        p_xslt                            IN      jg_sql_repository.xslt%TYPE,
+        p_object_type                     IN      jg_sql_repository.object_type%TYPE)
+        RETURN CLOB IS
+------------------------------------------------------------------------------------------------------------------------
+        v_ctx                             DBMS_XMLSAVE.ctxtype;
+        v_xml_type                        XMLTYPE;
+        r_current_format                  pa_xmltype.tr_format;
+    BEGIN
+        r_current_format := pa_xmltype.biezacy_format;
+        pa_xmltype.set_short_format_xml();
+        v_ctx := DBMS_XMLGEN.newcontext(querystring => p_sql_query);
+        
+        DBMS_XMLGEN.setrowsettag(v_ctx, p_object_type);
+        --DBMS_XMLGEN.setRowTag (v_ctx, 'c');
+        v_xml_type := DBMS_XMLGEN.getxmltype(v_ctx);
+  
+        IF p_xslt IS NOT NULL
+        THEN
+            v_xml_type := v_xml_type.transform(xmltype(p_xslt));
+        END IF;
+  
+        pa_xmltype.ustaw_format(r_current_format);
+        DBMS_XMLGEN.closecontext(v_ctx);
+        
+        RETURN v_xml_type.getclobval();
+    END;
+
+------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_file_to_ftp(
+        p_xml                             IN      CLOB,
+        p_file_name                       IN      VARCHAR2) IS
+------------------------------------------------------------------------------------------------------------------------
+        v_connection UTL_TCP.connection;
+    BEGIN
+        v_connection := jg_ftp.login(p_host => JG_FTP_CONFIGURATION.sf_ftp_host,
+                                     p_port => JG_FTP_CONFIGURATION.sf_ftp_port,
+                                     p_user => JG_FTP_CONFIGURATION.sf_ftp_user,
+                                     p_pass => JG_FTP_CONFIGURATION.sf_ftp_password);
+                                     
+        jg_ftp.put_remote_ascii_data(p_conn => v_connection,
+                                     p_file => p_file_name,
+                                     p_data => p_xml);
+                                     
+        jg_ftp.get_reply(v_connection);
+        jg_ftp.LOGOUT(v_connection);
+    END;
+
+------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_file_to_local_folder(
+        p_xml                             IN      CLOB,
+        p_file_name                       IN      VARCHAR2) IS
+------------------------------------------------------------------------------------------------------------------------
+        file     UTL_FILE.file_type;
+        l_pos    INTEGER := 1;
+        xml_len  INTEGER;
+        l_amount BINARY_INTEGER := 32767;
+        l_buffer VARCHAR2(32767);
+    BEGIN
+        file    := UTL_FILE.fopen(location  => 'INFINITE',
+                                  filename  => p_file_name,
+                                  open_mode => 'w');
+                                  
+        xml_len := DBMS_LOB.getlength(p_xml);
+  
+        WHILE l_pos <= xml_len
+        LOOP
+            DBMS_LOB.read(p_xml, l_amount, l_pos, l_buffer);
+            l_buffer := REPLACE(l_buffer, CHR(13), NULL);
+            UTL_FILE.put(file => file, buffer => l_buffer);
+            l_pos := l_pos + l_amount;
+        END LOOP;
+  
+        UTL_FILE.fclose(file => file);
+    END;
+
+------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE delete_observed_operations(
+        p_batch_guid                      IN      jg_observed_operations.batch_guid%TYPE) IS
+------------------------------------------------------------------------------------------------------------------------
+    BEGIN
+        DELETE FROM jg_observed_operations
+         WHERE batch_guid = p_batch_guid;
+    END;
+
+------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE Process IS
+------------------------------------------------------------------------------------------------------------------------
+        v_sql_query                       jg_sql_repository.sql_query%TYPE;
+        v_xml                             CLOB;
+        v_file_name                       jg_output_log.file_name%TYPE;
+        v_batch_guid                      jg_observed_operations.batch_guid%TYPE;
+        v_xslt                            jg_sql_repository.xslt%TYPE;
+    BEGIN
+        FOR r_operation IN (SELECT object_type
+                              FROM jg_observed_operations
+                          GROUP BY object_type)
+        LOOP
+            SAVEPOINT create_xml;
+    
+            BEGIN
+                v_sql_query := get_query_from_sql_repository(r_operation.object_type,
+                                                             v_xslt,
+                                                             v_batch_guid);
+                                                             
+                v_xml := create_xml(v_sql_query, v_xslt, r_operation.object_type);
+                save_result(p_object_type => r_operation.object_type,
+                            p_batch_guid  => v_batch_guid,
+                            p_xml         => v_xml,
+                            p_status      => 'READY');
+                            
+                delete_observed_operations(v_batch_guid);
+            EXCEPTION
+            WHEN OTHERS
+            THEN
+                ROLLBACK TO create_xml;
+                save_result(p_object_type => r_operation.object_type,
+                            p_batch_guid  => v_batch_guid,
+                            p_xml         => v_xml,
+                            p_status      => 'ERROR',
+                            p_error       => SQLERRM || CHR(13) || DBMS_UTILITY.format_error_backtrace);
+            END;
+        END LOOP;
+  
+        FOR r_operation IN (SELECT * FROM jg_output_log WHERE status = 'READY')
+        LOOP
+            SAVEPOINT send_file;
+    
+            BEGIN
+                v_file_name := 'IN/' || REPLACE(r_operation.object_type || '_' || r_operation.id || '_' ||
+                               TO_CHAR(SYSTIMESTAMP, 'YYYYMMDD_HH24MISS') || '.xml', '/', '-');
+      
+                Send_File_To_FTP(p_xml       => r_operation.xml,
+                                 p_file_name => v_file_name);
+
+                /*
+                Send_File_To_Local_Folder (p_xml => r_operation.xml,
+                                           p_file_name => v_file_name);
+                */
+            
+                save_result(p_guid      => r_operation.guid,
+                            p_status    => 'PROCESSED',
+                            p_file_name => v_file_name);
+            EXCEPTION
+            WHEN OTHERS
+            THEN
+                ROLLBACK TO send_file;
+                save_result(p_guid   => r_operation.guid,
+                            p_status => 'ERROR',
+                            p_error  => SQLERRM || CHR(13) || DBMS_UTILITY.format_error_backtrace);
+            END;
+        END LOOP;
+    END;
+
+------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE Retry(
+        p_id                              IN      jg_output_log.id%TYPE ) IS
+------------------------------------------------------------------------------------------------------------------------
+    BEGIN
+        NULL;
+    END;
+    
+------------------------------------------------------------------------------------------------------------------------
+END;
+/
