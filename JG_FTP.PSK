@@ -6,7 +6,8 @@ AS
     ------------------------------------------------------------------------------------------------------------------------
     FUNCTION login (p_host      IN VARCHAR2,
                     p_port      IN VARCHAR2,
-                   SRAKA
+                    p_user      IN VARCHAR2,
+                    p_pass      IN VARCHAR2,
                     p_timeout   IN NUMBER := NULL)
         RETURN UTL_TCP.connection;
 
