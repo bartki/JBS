@@ -1,5 +1,7 @@
-INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
-     VALUES (1, 'NEW_CUSTOMER', '<?xml version="1.0" encoding="WINDOWS-1250"?>
+DECLARE
+    v_xml     XMLTYPE;
+BEGIN
+    v_xml := XMLTYPE('<?xml version="1.0" encoding="WINDOWS-1250"?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
   <xsl:output method="xml" encoding="windows-1250" indent="yes"/>
   <xsl:template match="/">
@@ -86,10 +88,12 @@ INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
       </xsl:for-each>
     </PA_KONTRAHENT_TK>
   </xsl:template>
-</xsl:stylesheet>')
-/
-INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
-     VALUES (2, 'CUSTOMER_DATA', '<?xml version="1.0" encoding="WINDOWS-1250"?>
+</xsl:stylesheet>');
+
+    INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
+         VALUES (JG_XSRE_SEQ.NEXTVAL, 'NEW_CUSTOMER', v_xml);
+
+    v_xml := XMLTYPE('<?xml version="1.0" encoding="WINDOWS-1250"?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
   <xsl:output method="xml" encoding="windows-1250" indent="yes"/>
   <xsl:template match="/">
@@ -173,10 +177,12 @@ INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
       </xsl:for-each>
     </PA_KONTRAHENT_TK>
   </xsl:template>
-</xsl:stylesheet>')
-/
-INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
-     VALUES (3, 'ORDER', '<?xml version="1.0" encoding="WINDOWS-1250"?>
+</xsl:stylesheet>');
+
+    INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
+         VALUES (JG_XSRE_SEQ.NEXTVAL, 'CUSTOMER_DATA', v_xml);
+
+    v_xml := XMLTYPE('<?xml version="1.0" encoding="WINDOWS-1250"?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
   <xsl:output method="xml" encoding="windows-1250" indent="yes"/>
   <xsl:template match="/">
@@ -477,5 +483,9 @@ INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
       </xsl:for-each>
     </LG_ZASP_T>
   </xsl:template>
-</xsl:stylesheet>')
+</xsl:stylesheet>');
+
+    INSERT INTO jg_xslt_repository (ID, OBJECT_TYPE, XSLT)
+         VALUES (JG_XSRE_SEQ.NEXTVAL, 'ORDER', v_xml);
+END;
 /
