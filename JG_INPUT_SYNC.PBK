@@ -82,7 +82,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
         ELSIF INSTR(UPPER(v_object_type), 'ORDER') > 0
         THEN
             po_object_type := 'ORDER';
-            po_on_time     := 'N';
+            po_on_time     := 'T';
         ELSE
             assert(false, 'Nie uda³o siê okreœliæ typu obiektu na podstawie pliku');
         END IF;
