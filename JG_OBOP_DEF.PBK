@@ -21,7 +21,7 @@ IS
 
         FETCH c_operation INTO r_obop;
 
-        CLOSE c_operation;
+            CLOSE c_operation;
 
         RETURN r_obop;
     END;
