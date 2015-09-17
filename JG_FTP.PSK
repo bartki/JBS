@@ -8,8 +8,8 @@ AS
                     p_port      IN VARCHAR2,
                     p_user      IN VARCHAR2,
                     p_pass      IN VARCHAR2,
-                    p_timeout   IN NUMBE:= NULL)
-        RETURN UTL_TCP.connectionasccsa;
+                    p_timeout   IN NUMBER := NULL)
+        RETURN UTL_TCP.connection;
 
     ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_passive (p_conn IN OUT NOCOPY UTL_TCP.connection)
