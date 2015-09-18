@@ -14,6 +14,11 @@ ADD CONSTRAINT JG_SQRE_OBJECT_TYPE UNIQUE (OBJECT_TYPE)
 /
 
 CREATE SEQUENCE JG_SQRE_SEQ
+    MINVALUE 1
+    MAXVALUE 9999999999999999999999999999
+    START WITH 1
+    INCREMENT BY 1
+    CACHE 20
 /
 
 CREATE TABLE JG_OBSERVED_OPERATIONS
@@ -22,7 +27,7 @@ CREATE TABLE JG_OBSERVED_OPERATIONS
   OBJECT_TYPE       VARCHAR2(30),
   OBJECT_ID         NUMBER(10,0),
   OPERATION_TYPE    VARCHAR2(6),
-  BATCH_GUID        VARCHAR2(40))
+  BATCH_GUID        VARCHAR2(40)
 )
 /
 ALTER TABLE JG_OBSERVED_OPERATIONS
@@ -50,7 +55,7 @@ CREATE TABLE JG_OUTPUT_LOG
   STATUS            VARCHAR2(9)  DEFAULT 'READY',
   XML               CLOB,
   ERROR             CLOB,
-  FILE_NAME	    VARCHAR2(100)
+  FILE_NAME      VARCHAR2(100)
 )
 /
 
@@ -67,52 +72,18 @@ CREATE SEQUENCE JG_OULO_SEQ
     INCREMENT BY 1
     CACHE 20
 /
-CREATE TABLE JG_XSLT_REPOSITORY
-(
-  ID                NUMBER(10,0),
-  OBJECT_TYPE       VARCHAR2(30)    NOT NULL,
-  XSLT              XMLTYPE NOT NULL
-)
-/
-ALTER TABLE JG_XSLT_REPOSITORY
-ADD CONSTRAINT JG_XSRE_PK PRIMARY KEY (ID)
-/
-ALTER TABLE JG_XSLT_REPOSITORY
-ADD CONSTRAINT JG_XSRE_OBJECT_TYPE UNIQUE (OBJECT_TYPE)
-/
-CREATE TABLE JG_INPUT_LOG
-(
-  ID                NUMBER(10,0),
-  GUID              VARCHAR2(32) DEFAULT SYS_GUID(),
-  LOG_DATE          DATE DEFAULT SYSDATE,
-  OBJECT_TYPE       VARCHAR2(30)  NOT NULL,
-  STATUS            VARCHAR2(9)  DEFAULT 'READY',
-  XML               CLOB,
-  ERROR             CLOB,
-  OBJECT_ID         NUMBER(10,0)
-)
-/
-ALTER TABLE JG_INPUT_LOG
-ADD CONSTRAINT JG_INLO_PK PRIMARY KEY (ID)
-/
-ALTER TABLE JG_INPUT_LOG
-ADD CONSTRAINT JG_INLO_STATUS CHECK (STATUS IN ('READY', 'PROCESSED', 'ERROR'))
-/
-CREATE SEQUENCE JG_INLO_SEQ
-    MINVALUE 1
-    MAXVALUE 9999999999999999999999999999
-    START WITH 1
-    INCREMENT BY 1
-    CACHE 20
-/
+
 BEGIN
     Api_Pa_Obie.Register_Table(p_object_name => 'JG_SQL_REPOSITORY', p_subsystem_code => 'PA', p_alias => 'SQRE');
     Api_Pa_Obie.Register_Table(p_object_name => 'JG_OBSERVED_OPERATIONS', p_subsystem_code => 'PA', p_alias => 'JOBOP');
     Api_Pa_Obie.Register_Table(p_object_name => 'JG_OUTPUT_LOG', p_subsystem_code => 'PA', p_alias => 'OULO');
-    Api_Pa_Obie.Register_Table(p_object_name => 'JG_INPUT_LOG', p_subsystem_code => 'PA', p_alias => 'INLO');
     Api_Pa_Obie.Register_Sequence(p_object_name => 'JG_OBOP_SEQ', p_subsystem_code => 'PA');
     Api_Pa_Obie.Register_Sequence(p_object_name => 'JG_OULO_SEQ', p_subsystem_code => 'PA');
-    Api_Pa_Obie.Register_Sequence(p_object_name => 'JG_INLO_SEQ', p_subsystem_code => 'PA');
-    Api_Pa_Obie.Register_Sequence(p_object_name => 'JG_SQRE_SEQ', p_subsystem_code => 'PA');	
+    Api_Pa_Obie.Register_Sequence(p_object_name => 'JG_SQRE_SEQ', p_subsystem_code => 'PA');    
+    Api_Pa_Obie.Register_Package (p_object_name => 'JG_FTP', p_subsystem_code => 'PA');
+    Api_Pa_Obie.Register_Package (p_object_name => 'JG_FTP_CONFIGURATION', p_subsystem_code => 'PA');
+    Api_Pa_Obie.Register_Package (p_object_name => 'JG_INPUT_SYNC', p_subsystem_code => 'PA');
+    Api_Pa_Obie.Register_Package (p_object_name => 'JG_OUTPUT_SYNC', p_subsystem_code => 'PA');
+    Api_Pa_Obie.Register_Package (p_object_name => 'JG_OBOP_DEF', p_subsystem_code => 'PA');
 END;
 /
