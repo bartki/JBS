@@ -6,6 +6,7 @@ CREATE OR REPLACE PACKAGE JG_FTP_CONFIGURATION IS
     sf_ftp_password              VARCHAR2(30) := 'p6ucuyUk';
     sf_ftp_port                  PLS_INTEGER  := 21;    
     
+    sf_ftp_in_folder             VARCHAR2(30) := 'IN';
     sf_ftp_out_folder            VARCHAR2(30) := 'OUT';
     sf_ftp_out_archive_folder    VARCHAR2(30) := 'OUT/Archive';
     
