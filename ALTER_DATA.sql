@@ -367,3 +367,19 @@ BEGIN
              VALUES (jg_sqre_seq.NEXTVAL, 'ORDER', v_sql, null);
 END;
 /
+BEGIN
+    INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt)
+             VALUES (jg_sqre_seq.NEXTVAL, 'RESERVATION',
+                     'SELECT zare.dest_symbol            order_id,
+                             zare.data_realizacji        realization_date,
+                             inma.indeks                 commoditiy_id,
+                             zare.ilosc                  quantity_ordered,
+                             reze.ilosc_zarezerwowana    quantity_reserved
+                        FROM lg_rzm_rezerwacje reze,
+                             lg_rzm_zadania_rezerwacji zare,
+                             ap_indeksy_materialowe inma
+                       WHERE     reze.zare_id = zare.id
+                             AND zare.inma_id = inma.id
+                             AND reze.id IN (:p_id)', null);
+END;
+/
