@@ -383,3 +383,29 @@ BEGIN
                              AND reze.id IN (:p_id)', null);
 END;
 /
+BEGIN
+    INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt)
+             VALUES (jg_sqre_seq.NEXTVAL, 'SET_COMPONENTS',
+                     'SELECT inma_kpl.indeks set_id,
+                             inma_kpl.nazwa set_name,
+                             Lg_Stm_Sgpu_Sql.Stan_Goracy(inma_kpl.id, inma_kpl.jdmr_nazwa, null) available_stock,
+                             inma_kpl.atrybut_n05 price_before_discount,
+                             inma_kpl.atrybut_n06 price_after_discount,
+                             inma_kpl.atrybut_d01 valid_date,
+                             CURSOR (SELECT inma_skpl.indeks commodity_id,
+                                            inma_skpl.nazwa commodity_name,
+                                            kpsk1.ilosc quantity,
+                                            kpsk1.premiowy bonus,
+                                            DECODE(kpsk1.dynamiczny, ''T'', ''DYNAMIC'', ''STATIC'') set_type,
+                                            DECODE(inma_skpl.atrybut_t03, ''T'', ''N'', ''Y'') contract_payment
+                                       FROM lg_kpl_skladniki_kompletu kpsk1,
+                                            ap_indeksy_materialowe inma_skpl
+                                      WHERE     kpsk1.skl_inma_id = inma_skpl.id
+                                            AND kpsk1.kpl_inma_id = kpsk.kpl_inma_id) components
+                        FROM lg_kpl_skladniki_kompletu kpsk,
+                             ap_indeksy_materialowe inma_kpl
+                       WHERE     kpsk.kpl_inma_id = inma_kpl.id
+                             AND ROWNUM = 1
+                             AND kpsk.kpl_inma_id IN (:p_id)', null);
+END;
+/
