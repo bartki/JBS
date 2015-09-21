@@ -188,7 +188,11 @@ BEGIN
   <xsl:template match="/">
     <LG_ZASP_T>
       <xsl:for-each select="ORDER">
-        <WZORZEC>Zamówienie sprzeda¿y - Wroc³aw</WZORZEC>
+        <xsl:for-each select="WZORZEC">
+          <WZORZEC>
+            <xsl:value-of select="."/>
+          </WZORZEC>
+        </xsl:for-each>
         <TYP_ZAMOWIENIA>ZS</TYP_ZAMOWIENIA>
         <xsl:for-each select="ID">
           <SYMBOL_DOKUMENTU>
@@ -475,7 +479,11 @@ BEGIN
                 <POLA_DODATKOWE>
                   <PA_POLE_DODATKOWE_T/>
                 </POLA_DODATKOWE>
-                <NAZWA_JEDNOSTKI_MIARY>szt.</NAZWA_JEDNOSTKI_MIARY>
+                <xsl:for-each select="JDMR_NAZWA">
+                  <NAZWA_JEDNOSTKI_MIARY>
+                    <xsl:value-of select="."/>
+                  </NAZWA_JEDNOSTKI_MIARY>
+                </xsl:for-each>
               </LG_ZASI_T>
             </xsl:for-each>
           </xsl:for-each>
