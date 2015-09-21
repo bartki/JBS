@@ -11,29 +11,29 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
             SELECT sql_query, xslt
               FROM jg_sql_repository
              WHERE object_type = pc_object_type;
-  
+
         v_sql_query jg_sql_repository.sql_query%TYPE;
     BEGIN
-         OPEN c_sql_query(p_object_type);  
+         OPEN c_sql_query(p_object_type);
         FETCH c_sql_query
-         INTO v_sql_query, po_xslt;  
+         INTO v_sql_query, po_xslt;
         CLOSE c_sql_query;
-  
+
         IF v_sql_query IS NULL
         THEN
             assert(FALSE, 'Brak zdefiniowanego zapytania dla obiektu o typie ''' || p_object_type || '');
         ELSE
             po_batch_guid := SYS_GUID();
-    
+
             UPDATE jg_observed_operations
                SET batch_guid = po_batch_guid
              WHERE object_type = p_object_type;
-    
+
             v_sql_query := REPLACE(v_sql_query, ':p_id',
                              'SELECT object_id FROM jg_observed_operations WHERE batch_guid = ''' ||
                              po_batch_guid || '''');
         END IF;
-  
+
         RETURN v_sql_query;
     END;
 
@@ -78,20 +78,20 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
     BEGIN
         r_current_format := pa_xmltype.biezacy_format;
         pa_xmltype.set_short_format_xml();
-        v_ctx := DBMS_XMLGEN.newcontext(querystring => p_sql_query);
         
+        v_ctx := DBMS_XMLGEN.newcontext(querystring => p_sql_query);
         DBMS_XMLGEN.setrowsettag(v_ctx, p_object_type);
-        --DBMS_XMLGEN.setRowTag (v_ctx, 'c');
-        v_xml_type := DBMS_XMLGEN.getxmltype(v_ctx);
-  
+        
+        v_xml_type := DBMS_XMLGEN.getXMLType(v_ctx);
+
         IF p_xslt IS NOT NULL
         THEN
             v_xml_type := v_xml_type.transform(xmltype(p_xslt));
         END IF;
-  
+
         pa_xmltype.ustaw_format(r_current_format);
         DBMS_XMLGEN.closecontext(v_ctx);
-        
+
         RETURN v_xml_type.getclobval();
     END;
 
@@ -106,11 +106,11 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
                                      p_port => JG_FTP_CONFIGURATION.sf_ftp_port,
                                      p_user => JG_FTP_CONFIGURATION.sf_ftp_user,
                                      p_pass => JG_FTP_CONFIGURATION.sf_ftp_password);
-                                     
+
         jg_ftp.put_remote_ascii_data(p_conn => v_connection,
                                      p_file => p_file_name,
                                      p_data => p_xml);
-                                     
+
         jg_ftp.get_reply(v_connection);
         jg_ftp.LOGOUT(v_connection);
     END;
@@ -129,9 +129,9 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
         file    := UTL_FILE.fopen(location  => 'INFINITE',
                                   filename  => p_file_name,
                                   open_mode => 'w');
-                                  
+
         xml_len := DBMS_LOB.getlength(p_xml);
-  
+
         WHILE l_pos <= xml_len
         LOOP
             DBMS_LOB.read(p_xml, l_amount, l_pos, l_buffer);
@@ -139,7 +139,7 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
             UTL_FILE.put(file => file, buffer => l_buffer);
             l_pos := l_pos + l_amount;
         END LOOP;
-  
+
         UTL_FILE.fclose(file => file);
     END;
 
@@ -158,6 +158,7 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
         v_sql_query                       jg_sql_repository.sql_query%TYPE;
         v_xml                             CLOB;
         v_file_name                       jg_output_log.file_name%TYPE;
+        v_patch                           jg_output_log.file_name%TYPE;
         v_batch_guid                      jg_observed_operations.batch_guid%TYPE;
         v_xslt                            jg_sql_repository.xslt%TYPE;
     BEGIN
@@ -166,18 +167,18 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
                           GROUP BY object_type)
         LOOP
             SAVEPOINT create_xml;
-    
+
             BEGIN
                 v_sql_query := get_query_from_sql_repository(r_operation.object_type,
                                                              v_xslt,
                                                              v_batch_guid);
-                                                             
+
                 v_xml := create_xml(v_sql_query, v_xslt, r_operation.object_type);
                 save_result(p_object_type => r_operation.object_type,
                             p_batch_guid  => v_batch_guid,
                             p_xml         => v_xml,
                             p_status      => 'READY');
-                            
+
                 delete_observed_operations(v_batch_guid);
             EXCEPTION
             WHEN OTHERS
@@ -190,23 +191,25 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
                             p_error       => SQLERRM || CHR(13) || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
-  
+
         FOR r_operation IN (SELECT * FROM jg_output_log WHERE status = 'READY')
         LOOP
             SAVEPOINT send_file;
-    
+
             BEGIN
-                v_file_name := 'IN/' || REPLACE(r_operation.object_type || '_' || r_operation.id || '_' ||
-                               TO_CHAR(SYSTIMESTAMP, 'YYYYMMDD_HH24MISS') || '.xml', '/', '-');
-      
+                v_file_name := REPLACE(r_operation.object_type || '_' || r_operation.id || '_'
+                      || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDD_HH24MISS') || '.xml', '/', '-');
+                
+                v_patch := jg_ftp_configuration.sf_ftp_in_folder ||'/' || v_file_name;
+                
                 Send_File_To_FTP(p_xml       => r_operation.xml,
-                                 p_file_name => v_file_name);
+                                 p_file_name => v_patch);
 
                 /*
                 Send_File_To_Local_Folder (p_xml => r_operation.xml,
-                                           p_file_name => v_file_name);
+                                           p_file_name => v_patch);
                 */
-            
+
                 save_result(p_guid      => r_operation.guid,
                             p_status    => 'PROCESSED',
                             p_file_name => v_file_name);
@@ -228,7 +231,7 @@ CREATE OR REPLACE PACKAGE BODY JG_OUTPUT_SYNC IS
     BEGIN
         NULL;
     END;
-    
+
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /

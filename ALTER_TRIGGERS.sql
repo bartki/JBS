@@ -229,4 +229,42 @@ BEGIN
     END IF;
 END;
 /
-
+CREATE OR REPLACE TRIGGER JG_REZE_OBSERVE
+    BEFORE INSERT OR DELETE OR UPDATE ON lg_rzm_rezerwacje
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF Lg_Rzm_Zare_Agd.zrre_typ(p_id => NVL(:NEW.zare_id, :OLD.zare_id)) = 'ZASI'
+    THEN
+        IF INSERTING OR UPDATING
+        THEN
+            jg_obop_def.add_operation (p_object_id        => :NEW.id,
+                                       p_object_type      => 'RESERVATION',
+                                       p_operation_type   => 'UPDATE');
+        ELSIF DELETING
+        THEN
+            jg_obop_def.add_operation (p_object_id        => :OLD.id,
+                                       p_object_type      => 'RESERVATION',
+                                       p_operation_type   => 'DELETE');
+        END IF;
+    END IF;
+END;
+/
+CREATE OR REPLACE TRIGGER JG_SETS_OBSERVE
+    BEFORE INSERT OR DELETE OR UPDATE ON lg_kpl_skladniki_kompletu
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF INSERTING OR UPDATING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :NEW.kpl_inma_id,
+                                   p_object_type      => 'SET_COMPONENTS',
+                                   p_operation_type   => 'UPDATE');
+    ELSIF DELETING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :OLD.kpl_inma_id,
+                                   p_object_type      => 'SET_COMPONENTS',
+                                   p_operation_type   => 'DELETE');
+    END IF;
+END;
+/
