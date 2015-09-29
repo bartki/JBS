@@ -387,7 +387,7 @@ END;
 /
 BEGIN
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt)
-             VALUES (jg_sqre_seq.NEXTVAL, 'RESERVATION',
+             VALUES (jg_sqre_seq.NEXTVAL, 'RESERVATIONS',
                      'SELECT zare.dest_symbol            order_id,
                              zare.data_realizacji        realization_date,
                              inma.indeks                 commoditiy_id,
@@ -403,7 +403,7 @@ END;
 /
 BEGIN
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt)
-             VALUES (jg_sqre_seq.NEXTVAL, 'SET_COMPONENTS',
+             VALUES (jg_sqre_seq.NEXTVAL, 'SETS_COMPONENTS',
                      'SELECT inma_kpl.indeks set_id,
                              inma_kpl.nazwa set_name,
                              Lg_Stm_Sgpu_Sql.Stan_Goracy(inma_kpl.id, inma_kpl.jdmr_nazwa, null) available_stock,
