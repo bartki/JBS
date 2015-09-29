@@ -239,12 +239,12 @@ BEGIN
         IF INSERTING OR UPDATING
         THEN
             jg_obop_def.add_operation (p_object_id        => :NEW.id,
-                                       p_object_type      => 'RESERVATION',
+                                       p_object_type      => 'RESERVATIONS',
                                        p_operation_type   => 'UPDATE');
         ELSIF DELETING
         THEN
             jg_obop_def.add_operation (p_object_id        => :OLD.id,
-                                       p_object_type      => 'RESERVATION',
+                                       p_object_type      => 'RESERVATIONS',
                                        p_operation_type   => 'DELETE');
         END IF;
     END IF;
@@ -258,12 +258,12 @@ BEGIN
     IF INSERTING OR UPDATING
     THEN
         jg_obop_def.add_operation (p_object_id        => :NEW.kpl_inma_id,
-                                   p_object_type      => 'SET_COMPONENTS',
+                                   p_object_type      => 'SETS_COMPONENTS',
                                    p_operation_type   => 'UPDATE');
     ELSIF DELETING
     THEN
         jg_obop_def.add_operation (p_object_id        => :OLD.kpl_inma_id,
-                                   p_object_type      => 'SET_COMPONENTS',
+                                   p_object_type      => 'SETS_COMPONENTS',
                                    p_operation_type   => 'DELETE');
     END IF;
 END;
