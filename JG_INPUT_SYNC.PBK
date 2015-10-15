@@ -195,6 +195,8 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
 ------------------------------------------------------------------------------------------------------------------------
         v_object_id                       jg_input_log.object_id%TYPE;
     BEGIN
+        Pa_Wass_Def.Ustaw(p_nazwa => 'IMPORT_INFINITE', p_wartosc => 'T');
+
         CASE pr_operation.object_type
                 
         WHEN 'CUSTOMER_DATA'
@@ -213,6 +215,8 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
         save_result(p_inlo_id   => pr_operation.id,
                     p_status    => 'PROCESSED',
                     p_object_id => v_object_id);
+
+        Pa_Wass_Def.Usun(p_nazwa => 'IMPORT_INFINITE');
     END;
     
 ------------------------------------------------------------------------------------------------------------------------      
