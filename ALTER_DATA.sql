@@ -335,26 +335,26 @@ BEGIN
                                             FROM jg_input_log log1,
                                                  ap_indeksy_materialowe inma,
                                                  XMLTABLE (
-                                                     '//Order/Items/Item'
+                                                     ''//Order/Items/Item''
                                                      PASSING xmltype (log1.xml)
                                                      COLUMNS ordinal_number     VARCHAR2 (30)
-                                                                                    PATH '/Item/OrdinalNumber',
+                                                                                    PATH ''/Item/OrdinalNumber'',
                                                              note               VARCHAR2 (30)
-                                                                                    PATH '/Item/Comment',
+                                                                                    PATH ''/Item/Comment'',
                                                              commodity_id       VARCHAR2 (30)
-                                                                                    PATH '/Item/CommodityID',
+                                                                                    PATH ''/Item/CommodityID'',
                                                              quantity_ordered   VARCHAR2 (30)
-                                                                                    PATH '/Item/QuantityOrdered',
+                                                                                    PATH ''/Item/QuantityOrdered'',
                                                              discount           VARCHAR2 (30)
-                                                                                    PATH '/Item/Discount',
+                                                                                    PATH ''/Item/Discount'',
                                                              promotion_code     VARCHAR2 (30)
-                                                                                    PATH '/Item/PromotionCode',
+                                                                                    PATH ''/Item/PromotionCode'',
                                                              promotion_name     VARCHAR2 (30)
-                                                                                    PATH '/Item/PromotionName',
+                                                                                    PATH ''/Item/PromotionName'',
                                                              net_price          VARCHAR2 (30)
-                                                                                    PATH '/Item/NetPrice',
+                                                                                    PATH ''/Item/NetPrice'',
                                                              commodity_ean      VARCHAR2 (30)
-                                                                                    PATH '/Item/CommodityEAN') item_xml
+                                                                                    PATH ''/Item/CommodityEAN'') item_xml
                                            WHERE     log1.id = LOG.id
                                                  AND inma.indeks = item_xml.commodity_id)
                              items
@@ -362,21 +362,21 @@ BEGIN
                          lg_documents_templates wzrc,
                          lg_punkty_sprzedazy pusp,
                          XMLTABLE (
-                             '//Order'
+                             ''//Order''
                              PASSING xmltype (LOG.xml)
-                             COLUMNS id VARCHAR2 (30) PATH '/Order/ID',
-                                     customer_symbol VARCHAR2 (30) PATH '/Order/CustomerID',
-                                     supplier_symbol VARCHAR2 (30) PATH '/Order/SupplierID',
-                                     realization_date DATE PATH '/Order/RealizationDate',
+                             COLUMNS id VARCHAR2 (30) PATH ''/Order/ID'',
+                                     customer_symbol VARCHAR2 (30) PATH ''/Order/CustomerID'',
+                                     supplier_symbol VARCHAR2 (30) PATH ''/Order/SupplierID'',
+                                     realization_date DATE PATH ''/Order/RealizationDate'',
                                      sales_representative_id VARCHAR2 (30)
-                                         PATH '/Order/SalesRepresentativeID',
+                                         PATH ''/Order/SalesRepresentativeID'',
                                      payment_method_id VARCHAR2 (30)
-                                         PATH '/Order/PaymentMethodID',
+                                         PATH ''/Order/PaymentMethodID'',
                                      delivery_method_id VARCHAR2 (30)
-                                         PATH '/Order/DeliveryMethodID',
-                                     discount VARCHAR2 (30) PATH '/Order/Discount',
-                                     note VARCHAR2 (30) PATH '/Order/Comment',
-                                     net_value VARCHAR2 (30) PATH '/Order/NetValue') header
+                                         PATH ''/Order/DeliveryMethodID'',
+                                     discount VARCHAR2 (30) PATH ''/Order/Discount'',
+                                     note VARCHAR2 (30) PATH ''/Order/Comment'',
+                                     net_value VARCHAR2 (30) PATH ''/Order/NetValue'') header
                    WHERE     pusp.id = wzrc.pusp_id
                          AND wzrc.id = :p_wzrc_id
                          AND LOG.id = :p_operation_id';
