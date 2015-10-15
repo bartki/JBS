@@ -275,93 +275,111 @@ DECLARE
     v_sql         CLOB;
 BEGIN
     v_sql := 'SELECT header.*,
-                           wzrc.pricing_type PRICING_TYPE,
-                           pa_firm_sql.Kod(wzrc.firm_id) COMPANY_CODE,
-                           wzrc.place_of_issue PLACE_OF_ISSUE,
-                           NVL(wzrc.base_currency, wzrc.currency) CURRENCY,
-                           pusp.kod PUSP_KOD,
-                           CURSOR (SELECT konr.symbol,
-                                          konr.nazwa,
-                                          konr.skrot,
-                                          konr.nip,
-                                          adge.miejscowosc,
-                                          adge.kod_pocztowy,
-                                          adge.ulica,
-                                          adge.nr_domu,
-                                          adge.nr_lokalu,
-                                          adge.poczta
-                                     FROM ap_kontrahenci konr,
-                                          pa_adr_adresy_geograficzne adge
-                                    WHERE adge.id = Lg_Konr_Adresy.Adge_Id_Siedziby(konr.id)
-                                          AND konr.id = wzrc.issuer_id) SPRZEDAWCA,
-                           CURSOR (SELECT konr.symbol,
-                                          konr.nazwa,
-                                          konr.skrot,
-                                          konr.nip,
-                                          adge.miejscowosc,
-                                          adge.kod_pocztowy,
-                                          adge.ulica,
-                                          adge.nr_domu,
-                                          adge.nr_lokalu,
-                                          adge.poczta
-                                     FROM ap_kontrahenci konr,
-                                          pa_adr_adresy_geograficzne adge
-                                    WHERE adge.id = Lg_Konr_Adresy.Adge_Id_Siedziby(konr.id)
-                                          AND konr.symbol = header.customer_symbol) PLATNIK,
-                           CURSOR (SELECT konr.symbol,
-                                          konr.nazwa,
-                                          konr.skrot,
-                                          konr.nip,
-                                          adge.miejscowosc,
-                                          adge.kod_pocztowy,
-                                          adge.ulica,
-                                          adge.nr_domu,
-                                          adge.nr_lokalu,
-                                          adge.poczta
-                                     FROM ap_kontrahenci konr,
-                                          pa_adr_adresy_geograficzne adge
-                                    WHERE adge.id = Lg_Konr_Adresy.Adge_Id_Siedziby(konr.id)
-                                          AND konr.symbol = header.supplier_symbol) ODBIORCA,
-                           CURSOR (SELECT item_xml.*,
-                                          inma.nazwa COMMODITY_NAME,
-                                          Api_Rk_Stva.Kod(inma.stva_id) KOD_STAWKI_VAT,
-                                          NVL(wzrc.base_currency, wzrc.currency) CURRENCY
-                                     FROM jg_input_log log1,
-                                          ap_indeksy_materialowe inma,
-                                          XMLTABLE(''//Order/Items/Item'' PASSING xmltype(log1.xml)
-                                            COLUMNS
-                                              ORDINAL_NUMBER           VARCHAR2(30) PATH ''/Item/OrdinalNumber'',
-                                              NOTE                     VARCHAR2(30) PATH ''/Item/Comment'',
-                                              COMMODITY_ID             VARCHAR2(30) PATH ''/Item/CommodityID'',
-                                              QUANTITY_ORDERED         VARCHAR2(30) PATH ''/Item/QuantityOrdered'',
-                                              DISCOUNT                 VARCHAR2(30) PATH ''/Item/Discount'',
-                                              PROMOTION_CODE           VARCHAR2(30) PATH ''/Item/PromotionCode'',
-                                              PROMOTION_NAME           VARCHAR2(30) PATH ''/Item/PromotionName'',
-                                              NET_PRICE                VARCHAR2(30) PATH ''/Item/NetPrice'',
-                                              COMMODITY_EAN            VARCHAR2(30) PATH ''/Item/CommodityEAN''
-                                            ) item_xml
-                                    WHERE     log1.id = log.id
-                                          AND inma.indeks = item_xml.commodity_id ) ITEMS
-                      FROM jg_input_log log,
-                           lg_documents_templates wzrc,
-                           lg_punkty_sprzedazy pusp,
-                           XMLTABLE(''//Order'' PASSING xmltype(log.xml)
-                             COLUMNS
-                             ID                       VARCHAR2(30) PATH ''/Order/ID'',
-                             CUSTOMER_SYMBOL          VARCHAR2(30) PATH ''/Order/CustomerID'',
-                             SUPPLIER_SYMBOL          VARCHAR2(30) PATH ''/Order/SupplierID'',
-                             REALIZATION_DATE         DATE         PATH ''/Order/RealizationDate'',
-                             SALES_REPRESENTATIVE_ID  VARCHAR2(30) PATH ''/Order/SalesRepresentativeID'',
-                             PAYMENT_METHOD_ID        VARCHAR2(30) PATH ''/Order/PaymentMethodID'',
-                             DELIVERY_METHOD_ID       VARCHAR2(30) PATH ''/Order/DeliveryMethodID'',
-                             DISCOUNT                 VARCHAR2(30) PATH ''/Order/Discount'',
-                             NOTE                     VARCHAR2(30) PATH ''/Order/Comment'',
-                             NET_VALUE                VARCHAR2(30) PATH ''/Order/NetValue''
-                           ) header
-                           
-                     WHERE     pusp.id = wzrc.pusp_id
-                           AND wzrc.id = :p_wzrc_id
-                           AND log.id  = :p_operation_id';
+                         wzrc.pricing_type pricing_type,
+                         pa_firm_sql.kod (wzrc.firm_id) company_code,
+                         wzrc.name wzorzec,
+                         wzrc.place_of_issue place_of_issue,
+                         NVL (wzrc.base_currency, wzrc.currency) currency,
+                         pusp.kod pusp_kod,
+                         CURSOR (
+                             SELECT konr.symbol,
+                                    konr.nazwa,
+                                    konr.skrot,
+                                    konr.nip,
+                                    adge.miejscowosc,
+                                    adge.kod_pocztowy,
+                                    adge.ulica,
+                                    adge.nr_domu,
+                                    adge.nr_lokalu,
+                                    adge.poczta
+                               FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
+                              WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
+                                    AND konr.id = wzrc.issuer_id)
+                             sprzedawca,
+                         CURSOR (
+                             SELECT konr.symbol,
+                                    konr.nazwa,
+                                    konr.skrot,
+                                    konr.nip,
+                                    adge.miejscowosc,
+                                    adge.kod_pocztowy,
+                                    adge.ulica,
+                                    adge.nr_domu,
+                                    adge.nr_lokalu,
+                                    adge.poczta
+                               FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
+                              WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
+                                    AND konr.symbol = header.customer_symbol)
+                             platnik,
+                         CURSOR (
+                             SELECT konr.symbol,
+                                    konr.nazwa,
+                                    konr.skrot,
+                                    konr.nip,
+                                    adge.miejscowosc,
+                                    adge.kod_pocztowy,
+                                    adge.ulica,
+                                    adge.nr_domu,
+                                    adge.nr_lokalu,
+                                    adge.poczta
+                               FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
+                              WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
+                                    AND konr.symbol = header.supplier_symbol)
+                             odbiorca,
+                         CURSOR (
+                                          SELECT item_xml.*,
+                                                 inma.nazwa commodity_name,
+                                                 inma.jdmr_nazwa_pdst_sp jdmr_nazwa,
+                                                 api_rk_stva.kod (inma.stva_id) kod_stawki_vat,
+                                                 NVL (wzrc.base_currency, wzrc.currency) currency
+                                            FROM jg_input_log log1,
+                                                 ap_indeksy_materialowe inma,
+                                                 XMLTABLE (
+                                                     '//Order/Items/Item'
+                                                     PASSING xmltype (log1.xml)
+                                                     COLUMNS ordinal_number     VARCHAR2 (30)
+                                                                                    PATH '/Item/OrdinalNumber',
+                                                             note               VARCHAR2 (30)
+                                                                                    PATH '/Item/Comment',
+                                                             commodity_id       VARCHAR2 (30)
+                                                                                    PATH '/Item/CommodityID',
+                                                             quantity_ordered   VARCHAR2 (30)
+                                                                                    PATH '/Item/QuantityOrdered',
+                                                             discount           VARCHAR2 (30)
+                                                                                    PATH '/Item/Discount',
+                                                             promotion_code     VARCHAR2 (30)
+                                                                                    PATH '/Item/PromotionCode',
+                                                             promotion_name     VARCHAR2 (30)
+                                                                                    PATH '/Item/PromotionName',
+                                                             net_price          VARCHAR2 (30)
+                                                                                    PATH '/Item/NetPrice',
+                                                             commodity_ean      VARCHAR2 (30)
+                                                                                    PATH '/Item/CommodityEAN') item_xml
+                                           WHERE     log1.id = LOG.id
+                                                 AND inma.indeks = item_xml.commodity_id)
+                             items
+                    FROM jg_input_log LOG,
+                         lg_documents_templates wzrc,
+                         lg_punkty_sprzedazy pusp,
+                         XMLTABLE (
+                             '//Order'
+                             PASSING xmltype (LOG.xml)
+                             COLUMNS id VARCHAR2 (30) PATH '/Order/ID',
+                                     customer_symbol VARCHAR2 (30) PATH '/Order/CustomerID',
+                                     supplier_symbol VARCHAR2 (30) PATH '/Order/SupplierID',
+                                     realization_date DATE PATH '/Order/RealizationDate',
+                                     sales_representative_id VARCHAR2 (30)
+                                         PATH '/Order/SalesRepresentativeID',
+                                     payment_method_id VARCHAR2 (30)
+                                         PATH '/Order/PaymentMethodID',
+                                     delivery_method_id VARCHAR2 (30)
+                                         PATH '/Order/DeliveryMethodID',
+                                     discount VARCHAR2 (30) PATH '/Order/Discount',
+                                     note VARCHAR2 (30) PATH '/Order/Comment',
+                                     net_value VARCHAR2 (30) PATH '/Order/NetValue') header
+                   WHERE     pusp.id = wzrc.pusp_id
+                         AND wzrc.id = :p_wzrc_id
+                         AND LOG.id = :p_operation_id';
                            
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt)
              VALUES (jg_sqre_seq.NEXTVAL, 'ORDER', v_sql, null);
@@ -369,7 +387,7 @@ END;
 /
 BEGIN
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt)
-             VALUES (jg_sqre_seq.NEXTVAL, 'RESERVATION',
+             VALUES (jg_sqre_seq.NEXTVAL, 'RESERVATIONS',
                      'SELECT zare.dest_symbol            order_id,
                              zare.data_realizacji        realization_date,
                              inma.indeks                 commoditiy_id,
@@ -385,7 +403,7 @@ END;
 /
 BEGIN
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt)
-             VALUES (jg_sqre_seq.NEXTVAL, 'SET_COMPONENTS',
+             VALUES (jg_sqre_seq.NEXTVAL, 'SETS_COMPONENTS',
                      'SELECT inma_kpl.indeks set_id,
                              inma_kpl.nazwa set_name,
                              Lg_Stm_Sgpu_Sql.Stan_Goracy(inma_kpl.id, inma_kpl.jdmr_nazwa, null) available_stock,
