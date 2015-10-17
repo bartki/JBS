@@ -1,5 +1,27 @@
+CREATE OR REPLACE PACKAGE jg_output_sync
+IS
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE process;
+------------------------------------------------------------------------------------------------------------------------
+END;
+/
+
 CREATE OR REPLACE PACKAGE BODY jg_output_sync
 IS
+    FUNCTION sqre_rt (p_object_type jg_sql_repository.object_type%TYPE)
+        RETURN jg_sql_repository%ROWTYPE
+    IS
+    BEGIN
+        FOR r_sqre IN (SELECT *
+                         FROM jg_sql_repository sqre
+                        WHERE sqre.object_type = p_object_type)
+        LOOP
+            RETURN r_sqre;
+        END LOOP;
+
+        RETURN NULL;
+    END;
+
     ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_query_from_sql_repository (
         p_object_type   IN     jg_sql_repository.object_type%TYPE,
@@ -16,14 +38,11 @@ IS
              WHERE object_type = pc_object_type;
 
         v_sql_query   jg_sql_repository.sql_query%TYPE;
+        r_sqre        jg_sql_repository%ROWTYPE;
     BEGIN
-        OPEN c_sql_query (p_object_type);
+        r_sqre := sqre_rt (p_object_type);
 
-        FETCH c_sql_query INTO v_sql_query, po_xslt;
-
-        CLOSE c_sql_query;
-
-        IF v_sql_query IS NULL
+        IF r_sqre.sql_query IS NULL
         THEN
             assert (
                 FALSE,
@@ -31,23 +50,26 @@ IS
                 || p_object_type
                 || '');
         ELSE
+            po_xslt := r_sqre.xslt;
             po_batch_guid := SYS_GUID ();
 
             UPDATE jg_observed_operations
                SET batch_guid = po_batch_guid
              WHERE object_type = p_object_type;
 
-            v_sql_query :=
+            r_sqre.sql_query :=
                 REPLACE (
-                    v_sql_query,
+                    r_sqre.sql_query,
                     ':p_id',
                        'SELECT object_id FROM jg_observed_operations WHERE batch_guid = '''
                     || po_batch_guid
                     || '''');
         END IF;
 
-        RETURN v_sql_query;
+        RETURN r_sqre.sql_query;
     END;
+
+    ------------------------------------------------------------------------------------------------------------------------
 
     ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE save_result (
@@ -191,11 +213,15 @@ IS
         v_file_location   jg_sql_repository.file_location%TYPE;
         v_batch_guid      jg_observed_operations.batch_guid%TYPE;
         v_xslt            jg_sql_repository.xslt%TYPE;
+        r_sqre            jg_sql_repository%ROWTYPE;
+        v_status          VARCHAR2 (10);
     BEGIN
         FOR r_operation IN (  SELECT object_type
                                 FROM jg_observed_operations
                             GROUP BY object_type)
         LOOP
+            r_sqre := sqre_rt (r_operation.object_type);
+
             SAVEPOINT create_xml;
 
             BEGIN
@@ -206,10 +232,20 @@ IS
 
                 v_xml :=
                     create_xml (v_sql_query, v_xslt, r_operation.object_type);
+
+                IF r_sqre.up_to_date = 'T'
+                THEN
+                    v_status := 'READY';
+                ELSE
+                    v_status := 'SKIPPED';
+                END IF;
+
                 save_result (p_object_type   => r_operation.object_type,
                              p_batch_guid    => v_batch_guid,
                              p_xml           => v_xml,
-                             p_status        => 'READY');
+                             p_status        => v_status);
+
+
 
                 delete_observed_operations (v_batch_guid);
             EXCEPTION
@@ -232,17 +268,11 @@ IS
                              WHERE status = 'READY')
         LOOP
             SAVEPOINT send_file;
-
-            FOR r_sqre IN (SELECT *
-                             FROM jg_sql_repository sqre
-                            WHERE sqre.object_type = r_operation.object_type)
-            LOOP
-                v_file_location := r_sqre.file_location;
-            END LOOP;
+            r_sqre := sqre_rt (r_operation.object_type);
 
             BEGIN
                 v_file_name :=
-                       NVL (v_file_location, 'IN/')
+                       NVL (r_sqre.file_location, 'IN/')
                     || '/'
                     || REPLACE (
                               r_operation.object_type
@@ -281,6 +311,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE retry (p_id IN jg_output_log.id%TYPE)
     IS
     ------------------------------------------------------------------------------------------------------------------------
@@ -288,5 +319,6 @@ IS
         NULL;
     END;
 ------------------------------------------------------------------------------------------------------------------------
+
 END;
 /
