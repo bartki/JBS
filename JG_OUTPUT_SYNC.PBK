@@ -1,11 +1,3 @@
-CREATE OR REPLACE PACKAGE jg_output_sync
-IS
-    ------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE process;
-------------------------------------------------------------------------------------------------------------------------
-END;
-/
-
 CREATE OR REPLACE PACKAGE BODY jg_output_sync
 IS
     FUNCTION sqre_rt (p_object_type jg_sql_repository.object_type%TYPE)
