@@ -6,7 +6,7 @@ IS
     BEGIN
         FOR r_sqre IN (SELECT *
                          FROM jg_sql_repository sqre
-                        WHERE sqre.object_type = p_object_type)
+                        WHERE sqre.object_type = p_object_type AND DIRECTION = 'OUT')
         LOOP
             RETURN r_sqre;
         END LOOP;
