@@ -112,6 +112,7 @@ IS
     IS
         ------------------------------------------------------------------------------------------------------------------------
         v_ctx              DBMS_XMLSAVE.ctxtype;
+        v_xml_clob         CLOB;
         v_xml_type         XMLTYPE;
         r_current_format   pa_xmltype.tr_format;
     BEGIN
@@ -122,7 +123,7 @@ IS
         DBMS_XMLGEN.setrowsettag (v_ctx, p_object_type);
         v_xml_type := DBMS_XMLGEN.getxmltype (v_ctx);
 
-        IF p_xslt IS NOT NULL
+        IF p_xslt IS NOT NULL AND v_xml_type IS NOT NULL
         THEN
             v_xml_type := v_xml_type.transform (xmltype (p_xslt));
         END IF;
@@ -130,7 +131,12 @@ IS
         pa_xmltype.ustaw_format (r_current_format);
         DBMS_XMLGEN.closecontext (v_ctx);
 
-        RETURN v_xml_type.getclobval ();
+        IF v_xml_type IS NOT NULL
+        THEN
+            v_xml_clob := v_xml_type.getclobval ();
+        END IF;
+
+        RETURN v_xml_clob;
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
@@ -225,7 +231,10 @@ IS
                 v_xml :=
                     create_xml (v_sql_query, v_xslt, r_operation.object_type);
 
-                IF r_sqre.up_to_date = 'T'
+                IF v_xml IS NULL
+                THEN
+                    v_status := 'NO_DATA';
+                ELSIF r_sqre.up_to_date = 'T'
                 THEN
                     v_status := 'READY';
                 ELSE
