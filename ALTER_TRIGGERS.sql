@@ -341,3 +341,43 @@ BEGIN
 END;
 /
 
+CREATE OR REPLACE TRIGGER jg_foza_observe
+    BEFORE INSERT OR DELETE OR UPDATE OF opis, typ
+    ON ap_formy_zaplaty
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF INSERTING OR UPDATING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :NEW.id,
+                                   p_object_type      => 'PAYMENTS_METHODS',
+                                   p_operation_type   => 'UPDATE');
+    ELSIF DELETING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :OLD.id,
+                                   p_object_type      => 'PAYMENTS_METHODS',
+                                   p_operation_type   => 'DELETE');
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER jg_spdo_observe
+    BEFORE INSERT OR DELETE OR UPDATE OF opis, transport_wlasny
+    ON ap_sposoby_dostaw
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF INSERTING OR UPDATING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :NEW.id,
+                                   p_object_type      => 'DELIVERY_METHODS',
+                                   p_operation_type   => 'UPDATE');
+    ELSIF DELETING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :OLD.id,
+                                   p_object_type      => 'DELIVERY_METHODS',
+                                   p_operation_type   => 'DELETE');
+    END IF;
+END;
+/
+

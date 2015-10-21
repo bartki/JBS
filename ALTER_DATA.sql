@@ -150,7 +150,7 @@ GROUP BY rndo.symbol_dokumentu,
 </xsl:stylesheet>',
                         'IN/commodities',
                         'T',
-                        'IN');
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -233,7 +233,7 @@ GROUP BY rndo.symbol_dokumentu,
 </xsl:stylesheet>',
                         'IN/contractors',
                         'T',
-                        'IN');
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -306,7 +306,7 @@ GROUP BY rndo.symbol_dokumentu,
 </xsl:stylesheet>',
                         'IN/invoices',
                         'N',
-                        'IN');
+                        'OUT');
 
     v_order_clob :=
         'SELECT header.*,
@@ -429,7 +429,7 @@ GROUP BY rndo.symbol_dokumentu,
                  NULL,
                  'OUT/orders',
                  'T',
-                 'OUT');
+                 'IN');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -455,7 +455,7 @@ GROUP BY rndo.symbol_dokumentu,
                         NULL,
                         NULL,
                         'N',
-                        'IN');
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -504,7 +504,7 @@ GROUP BY rndo.symbol_dokumentu,
 </xsl:stylesheet>',
                         'IN/components',
                         'T',
-                        'IN');
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -519,7 +519,7 @@ GROUP BY rndo.symbol_dokumentu,
                  EMPTY_CLOB (),
                  'IN/sales_representatives',
                  'T',
-                 'IN');
+                 'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -571,6 +571,70 @@ GROUP BY rndo.symbol_dokumentu,
 </xsl:stylesheet>',
                         'OUT/new_customer',
                         'T',
-                        'OUT');
+                        'IN');
+
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,
+                                   sql_query,
+                                   xslt,
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'DELIVERY_METHODS',
+                 'SELECT kod delivery_method_id,
+                         opis description,
+                         transport_wlasny own_transport
+                    FROM ap_sposoby_dostaw spdo
+                   WHERE spdo.id IN (:p_id)',
+                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                     <xsl:template match="@*|node()">
+                        <xsl:copy>
+                           <xsl:apply-templates select="@*|node()" />
+                        </xsl:copy>
+                     </xsl:template>
+                     <xsl:template priority="2" match="ROW">
+                        <DELIVERY_METHOD><xsl:apply-templates/></DELIVERY_METHOD>
+                     </xsl:template>
+                     <xsl:template priority="2" match="DELIVERY_METHODS/DELIVERY_METHOD">
+                        <DELIVERY_METHOD><xsl:apply-templates/></DELIVERY_METHOD>
+                     </xsl:template>
+                  </xsl:stylesheet>',
+                 'IN/delivery_methods',
+                 'T',
+                 'OUT');
+
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,
+                                   sql_query,
+                                   xslt,
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'PAYMENTS_METHODS',
+                 'SELECT foza.kod payment_method_id,
+                         foza.opis description,
+                         foza.typ type
+                    FROM ap_formy_zaplaty foza
+                   WHERE foza.id in (:p_id)',
+                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                     <xsl:template match="@*|node()">
+                        <xsl:copy>
+                           <xsl:apply-templates select="@*|node()" />
+                        </xsl:copy>
+                     </xsl:template>
+                     <xsl:template priority="2" match="ROW">
+                        <PAYMENT_METHOD><xsl:apply-templates/></PAYMENT_METHOD>
+                     </xsl:template>
+                     <xsl:template priority="2" match="PAYMENTS_METHODS/PAYMENT_METHOD">
+                        <PAYMENT_METHOD><xsl:apply-templates/></PAYMENT_METHOD>
+                     </xsl:template>
+                  </xsl:stylesheet>',
+                 'IN/payments_methods',
+                 'T',
+                 'OUT');
 END;
 /
