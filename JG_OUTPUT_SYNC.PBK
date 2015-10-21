@@ -4,9 +4,10 @@ IS
         RETURN jg_sql_repository%ROWTYPE
     IS
     BEGIN
-        FOR r_sqre IN (SELECT *
-                         FROM jg_sql_repository sqre
-                        WHERE sqre.object_type = p_object_type AND DIRECTION = 'OUT')
+        FOR r_sqre
+            IN (SELECT *
+                  FROM jg_sql_repository sqre
+                 WHERE sqre.object_type = p_object_type AND direction = 'OUT')
         LOOP
             RETURN r_sqre;
         END LOOP;
