@@ -278,3 +278,66 @@ BEGIN
     END IF;
 END;
 /
+
+CREATE OR REPLACE TRIGGER jg_osol_observe
+    BEFORE INSERT OR
+           DELETE OR
+           UPDATE OF id,
+                     atrybut_t01,
+                     aktualna,
+                     kod,
+                     first_name,
+                     surname
+    ON lg_osoby_log
+    REFERENCING NEW AS new OLD AS old
+    FOR EACH ROW
+BEGIN
+    IF INSERTING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :new.id,
+                                   p_object_type      => 'SALES_REPRESENTATIVES',
+                                   p_operation_type   => 'INSERT');
+    ELSIF UPDATING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :new.id,
+                                   p_object_type      => 'SALES_REPRESENTATIVES',
+                                   p_operation_type   => 'UPDATE');
+    ELSIF DELETING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :new.id,
+                                   p_object_type      => 'SALES_REPRESENTATIVES',
+                                   p_operation_type   => 'DELETE');
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER jg_kngr_observe
+    BEFORE INSERT OR DELETE OR UPDATE OF grkn_id, konr_id, id
+    ON lg_kontrahenci_grup
+    REFERENCING NEW AS new OLD AS old
+    FOR EACH ROW
+DECLARE
+    PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+    FOR r_osol
+        IN (SELECT osol.id
+              FROM lg_osoby_log osol,
+                   (    SELECT *
+                          FROM lg_grupy_kontrahentow
+                    START WITH id = 63
+                    CONNECT BY PRIOR id = grkn_id) grko,
+                   lg_kontrahenci_grup kngr
+             WHERE     osol.atrybut_t01 = grko.nazwa
+                   AND grko.id = kngr.grkn_id
+                   AND osol.aktualna = 'T'
+                   AND kngr.konr_id IN (:new.konr_id, :old.konr_id))
+    LOOP
+        jg_obop_def.add_operation (p_object_id        => r_osol.id,
+                                   p_object_type      => 'SALES_REPRESENTATIVES',
+                                   p_operation_type   => 'INSERT');
+    END LOOP;
+
+    COMMIT;
+END;
+/
+
