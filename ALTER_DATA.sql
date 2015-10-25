@@ -57,7 +57,7 @@ GROUP BY rndo.symbol_dokumentu,
 </xsl:stylesheet>',
                         'IN/invoices_payments',
                         'N',
-                        'IN');
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -515,8 +515,39 @@ GROUP BY rndo.symbol_dokumentu,
                                    direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'SALES_REPRESENTATIVES',
-                 EMPTY_CLOB (),
-                 EMPTY_CLOB (),
+                 'SELECT osol.kod code,
+       osol.first_name,
+       osol.surname,
+       osol.atrybut_t01 region,
+       osol.aktualna up_to_date,
+       CURSOR (
+           SELECT konr.symbol  customer_number
+             FROM ap_kontrahenci konr,
+                  lg_kontrahenci_grup kngr,
+                  (    SELECT *
+                         FROM lg_grupy_kontrahentow
+                   START WITH id = 63
+                   CONNECT BY PRIOR id = grkn_id) grkn
+            WHERE     kngr.konr_id = konr.id
+                  AND kngr.grkn_id = grkn.id
+                  AND grkn.nazwa = osol.atrybut_t01)
+           contractors
+  FROM lg_osoby_log osol
+ WHERE atrybut_t01 IS NOT NULL AND osol.id IN ( :p_id)',
+                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+        <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+    <xsl:template match="@*|node()">
+        <xsl:copy>
+            <xsl:apply-templates select="@*|node()" />
+        </xsl:copy>
+    </xsl:template>
+    <xsl:template priority="2" match="ROW">
+        <SALES_REPRESENTATIVE><xsl:apply-templates/></SALES_REPRESENTATIVE>            
+    </xsl:template>
+    <xsl:template priority="2" match="CONTRACTORS/CONTRACTORS_ROW">
+        <CONTRACTOR><xsl:apply-templates/></CONTRACTOR>            
+    </xsl:template>                
+</xsl:stylesheet>',
                  'IN/sales_representatives',
                  'T',
                  'OUT');
@@ -582,25 +613,26 @@ GROUP BY rndo.symbol_dokumentu,
                                    direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'DELIVERY_METHODS',
-                 'SELECT kod delivery_method_id,
-                         opis description,
-                         transport_wlasny own_transport
-                    FROM ap_sposoby_dostaw spdo
-                   WHERE spdo.id IN (:p_id)',
-                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
-                     <xsl:template match="@*|node()">
-                        <xsl:copy>
-                           <xsl:apply-templates select="@*|node()" />
-                        </xsl:copy>
-                     </xsl:template>
-                     <xsl:template priority="2" match="ROW">
-                        <DELIVERY_METHOD><xsl:apply-templates/></DELIVERY_METHOD>
-                     </xsl:template>
-                     <xsl:template priority="2" match="DELIVERY_METHODS/DELIVERY_METHOD">
-                        <DELIVERY_METHOD><xsl:apply-templates/></DELIVERY_METHOD>
-                     </xsl:template>
-                  </xsl:stylesheet>',
+                 'SELECT kod delivery_method_code,
+       opis description,
+       aktualna up_to_date
+  FROM ap_sposoby_dostaw spdo
+ WHERE spdo.id IN ( :p_id)',
+                 '<xsl:stylesheet version="1.0"
+xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" version="1.5" indent="yes"
+  omit-xml-declaration="no" />
+  <xsl:template match="@*|node()">
+    <xsl:copy>
+      <xsl:apply-templates select="@*|node()" />
+    </xsl:copy>
+  </xsl:template>
+  <xsl:template priority="2" match="ROW">
+    <DELIVERY_METHOD>
+      <xsl:apply-templates />
+    </DELIVERY_METHOD>
+  </xsl:template>
+</xsl:stylesheet>',
                  'IN/delivery_methods',
                  'T',
                  'OUT');
@@ -614,27 +646,64 @@ GROUP BY rndo.symbol_dokumentu,
                                    direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'PAYMENTS_METHODS',
-                 'SELECT foza.kod payment_method_id,
-                         foza.opis description,
-                         foza.typ type
-                    FROM ap_formy_zaplaty foza
-                   WHERE foza.id in (:p_id)',
-                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
-                     <xsl:template match="@*|node()">
-                        <xsl:copy>
-                           <xsl:apply-templates select="@*|node()" />
-                        </xsl:copy>
-                     </xsl:template>
-                     <xsl:template priority="2" match="ROW">
-                        <PAYMENT_METHOD><xsl:apply-templates/></PAYMENT_METHOD>
-                     </xsl:template>
-                     <xsl:template priority="2" match="PAYMENTS_METHODS/PAYMENT_METHOD">
-                        <PAYMENT_METHOD><xsl:apply-templates/></PAYMENT_METHOD>
-                     </xsl:template>
-                  </xsl:stylesheet>',
+                 'SELECT foza.kod payment_method_code,
+       foza.opis description,
+       odroczenie_platnosci deferment_of_payment,
+       (SELECT rv_meaning
+          FROM cg_ref_codes
+         WHERE rv_domain = ''FORMY_ZAPLATY'' AND rv_low_value = foza.typ)
+           payment_type,
+       aktualna up_to_date
+  FROM ap_formy_zaplaty foza
+ WHERE foza.id IN ( :p_id)',
+                 '<xsl:stylesheet version="1.0"
+xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" version="1.5" indent="yes"
+  omit-xml-declaration="no" />
+  <xsl:template match="@*|node()">
+    <xsl:copy>
+      <xsl:apply-templates select="@*|node()" />
+    </xsl:copy>
+  </xsl:template>
+  <xsl:template priority="2" match="ROW">
+    <PAYMENT_METHOD>
+      <xsl:apply-templates />
+    </PAYMENT_METHOD>
+  </xsl:template>
+</xsl:stylesheet>',
                  'IN/payments_methods',
                  'T',
                  'OUT');
+				 
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,
+                                   sql_query,
+                                   xslt,
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'ORDERS_PATTERNS',
+                 'SELECT wzrc.pattern pattern_code, wzrc.name pattern_name, wzrc.up_to_date
+  FROM lg_documents_templates wzrc
+ WHERE document_type = ''ZS'' AND wzrc.id IN ( :p_id)',
+                 '<xsl:stylesheet version="1.0"
+xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" version="1.5" indent="yes"
+  omit-xml-declaration="no" />
+  <xsl:template match="@*|node()">
+    <xsl:copy>
+      <xsl:apply-templates select="@*|node()" />
+    </xsl:copy>
+  </xsl:template>
+  <xsl:template priority="2" match="ROW">
+    <ORDER_PATTERN>
+      <xsl:apply-templates />
+    </ORDER_PATTERN>
+  </xsl:template>
+</xsl:stylesheet>',
+                 'IN/orders_patterns',
+                 'T',
+                 'OUT');				 
 END;
 /
