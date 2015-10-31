@@ -1,6 +1,95 @@
 CREATE OR REPLACE PACKAGE BODY jg_input_sync
 IS
     ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_response
+    IS
+        v_ctx              DBMS_XMLSAVE.ctxtype;
+        v_xml_clob         CLOB;
+        v_xml_type         XMLTYPE;
+        r_current_format   pa_xmltype.tr_format;
+        v_sql_query        VARCHAR2 (4000);
+        v_oryginal_id      VARCHAR2 (100);
+    BEGIN
+        r_current_format := pa_xmltype.biezacy_format;
+        pa_xmltype.set_short_format_xml ();
+
+
+
+        FOR r_oulo IN (SELECT id,
+                              object_type,
+                              xml,
+                              file_name
+                         FROM jg_input_log inlo
+                        WHERE inlo.xml_response IS NULL)
+        LOOP
+            IF r_oulo.object_type = 'ORDER'
+            THEN
+                v_oryginal_id := NULL;
+
+                BEGIN
+                    v_oryginal_id :=
+                        pa_xmltype.wartosc (px_xml      => xmltype (r_oulo.xml),
+                                            p_sciezka   => '/Order/ID');
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        v_oryginal_id := 'TO_CHAR(NULL)';
+                END;
+
+                v_sql_query :=
+                       'SELECT '
+                    || v_oryginal_id
+                    || ' ID,
+                               status,
+                               TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
+                               TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
+                               FILE_NAME,
+                               error ERROR_MESSAGE,
+                               (SELECT symbol
+                                  FROM lg_sal_orders
+                                 WHERE id = inlo.object_id)
+                                   erp_order_symbol
+                          FROM jg_input_log inlo
+                         WHERE id ='
+                    || r_oulo.id;
+
+                v_ctx := DBMS_XMLGEN.newcontext (querystring => v_sql_query);
+                DBMS_XMLGEN.setrowtag (v_ctx, 'ORDER_RESPONSE');
+                DBMS_XMLGEN.setrowsettag (v_ctx, NULL);
+
+                v_xml_type := DBMS_XMLGEN.getxmltype (v_ctx);
+
+
+                pa_xmltype.ustaw_format (r_current_format);
+                DBMS_XMLGEN.closecontext (v_ctx);
+
+                IF v_xml_type IS NOT NULL
+                THEN
+                    v_xml_clob := v_xml_type.getclobval ();
+
+                    BEGIN
+                        jg_output_sync.send_file_to_ftp (
+                            p_xml         => v_xml_clob,
+                            p_file_name   =>    '/IN/Response_'
+                                             || r_oulo.file_name);
+
+                        UPDATE jg_input_log
+                           SET xml_response = v_xml_clob
+                         WHERE id = r_oulo.id;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            NULL;
+                    END;
+                END IF;
+            END IF;
+        END LOOP;
+    END;
+
+
+
+    ------------------------------------------------------------------------------------------------------------------------
+
     FUNCTION get_xslt_from_repository (
         p_object_type   IN jg_xslt_repository.object_type%TYPE)
         RETURN jg_xslt_repository.xslt%TYPE
@@ -33,6 +122,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     FUNCTION get_query_from_sql_repository (
         p_object_type   IN jg_input_log.object_type%TYPE)
         RETURN jg_sql_repository.sql_query%TYPE
@@ -66,6 +156,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE determine_object_type (
         p_xml            IN     CLOB,
         po_object_type      OUT jg_input_log.object_type%TYPE,
@@ -79,6 +170,8 @@ IS
 
         v_object_type   jg_input_log.object_type%TYPE;
     BEGIN
+        po_object_type := NULL;
+
         OPEN c_main_node_name (xmltype (p_xml));
 
         FETCH c_main_node_name INTO v_object_type;
@@ -105,6 +198,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     FUNCTION create_xml (
         p_sql_query     IN jg_sql_repository.sql_query%TYPE,
         p_object_type   IN jg_sql_repository.object_type%TYPE)
@@ -130,6 +224,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     FUNCTION transform_xml (
         p_xml           IN CLOB,
         p_object_type   IN jg_xslt_repository.object_type%TYPE)
@@ -154,6 +249,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE save_result (
         p_inlo_id     IN jg_input_log.id%TYPE,
         p_status      IN jg_input_log.status%TYPE,
@@ -171,6 +267,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     FUNCTION import_customer (
         p_xml           IN CLOB,
         p_object_type   IN jg_xslt_repository.object_type%TYPE)
@@ -194,6 +291,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     FUNCTION import_sale_order (
         p_operation_id   IN jg_output_log.id%TYPE,
         p_object_type    IN jg_xslt_repository.object_type%TYPE)
@@ -246,6 +344,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE process (pr_operation IN jg_input_log%ROWTYPE)
     IS
         ------------------------------------------------------------------------------------------------------------------------
@@ -282,6 +381,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE get_from_ftp
     IS
         ------------------------------------------------------------------------------------------------------------------------
@@ -316,6 +416,7 @@ IS
                     LOOP
                         BEGIN
                             SAVEPOINT process_file;
+                            v_object_type := r_sqre.object_type;
 
                             IF INSTR (v_file_list (v_i), '.xml') > 0
                             THEN
@@ -341,15 +442,14 @@ IS
                                              v_object_type,
                                              v_file,
                                              v_on_time);
-
-                                jg_ftp.rename (
-                                    p_conn   => v_connection,
-                                    p_from   =>    r_sqre.file_location
-                                                || '/'
-                                                || v_file_list (v_i),
-                                    p_to     =>    r_sqre.file_location
-                                                || '/archive/'
-                                                || v_file_list (v_i));
+                            /*  jg_ftp.rename (
+                                  p_conn   => v_connection,
+                                  p_from   =>    r_sqre.file_location
+                                              || '/'
+                                              || v_file_list (v_i),
+                                  p_to     =>    r_sqre.file_location
+                                              || '/archive/'
+                                              || v_file_list (v_i)); */
                             END IF;
                         EXCEPTION
                             WHEN OTHERS
@@ -412,6 +512,8 @@ IS
                                          || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
+
+        send_response;
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
@@ -442,6 +544,8 @@ IS
                                          || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
+
+        send_response;
     END;
 ------------------------------------------------------------------------------------------------------------------------
 
