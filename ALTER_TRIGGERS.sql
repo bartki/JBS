@@ -112,7 +112,7 @@ BEGIN
                                    p_operation_type   => 'UPDATE');
     ELSIF DELETING
     THEN
-        jg_obop_def.add_operation (p_object_id        => :new.id,
+        jg_obop_def.add_operation (p_object_id        => :old.id,
                                    p_object_type      => 'CONTRACTORS',
                                    p_operation_type   => 'DELETE');
     END IF;
@@ -380,4 +380,55 @@ BEGIN
     END IF;
 END;
 /
+
+CREATE OR REPLACE TRIGGER jg_discounts_observe
+    BEFORE INSERT OR DELETE OR UPDATE OF inma_id, konr_id, gras_id, grod_id, data_od, data_do, upust_procentowy
+    ON lg_przyp_upustow
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF INSERTING OR UPDATING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :NEW.id,
+                                   p_object_type      => 'DISCOUNTS',
+                                   p_operation_type   => 'UPDATE');
+    ELSIF DELETING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :OLD.id,
+                                   p_object_type      => 'DISCOUNTS',
+                                   p_operation_type   => 'DELETE');
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER jg_kngr_observe
+    BEFORE INSERT OR DELETE OR UPDATE OF grkn_id, default_group
+    ON lg_kontrahenci_grup
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF Pa_Wass_Def.wartosc(p_nazwa => 'IMPORT_INFINITE') = 'T'
+    THEN
+        RETURN;
+    END IF;
+    
+    IF INSERTING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :new.konr_id,
+                                   p_object_type      => 'CONTRACTORS',
+                                   p_operation_type   => 'INSERT');
+    ELSIF UPDATING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :new.konr_id,
+                                   p_object_type      => 'CONTRACTORS',
+                                   p_operation_type   => 'UPDATE');
+    ELSIF DELETING
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :old.konr_id,
+                                   p_object_type      => 'CONTRACTORS',
+                                   p_operation_type   => 'DELETE');
+    END IF;
+END;
+/
+
 

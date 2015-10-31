@@ -211,7 +211,16 @@ GROUP BY rndo.symbol_dokumentu,
             WHERE     konr_id = konr.id
                   AND typ_adresu = ''GEOGRAFICZNY''
                   AND rola_adresu = ''DOSTAWY'')
-           delivery_addresses
+           delivery_addresses,
+       CURSOR (
+           SELECT grko.kod GROUP_CODE,
+                  grko.nazwa GROUP_NAME,
+                  kngr.default_group DEFAULT_GROUP
+             FROM lg_kontrahenci_grup kngr,
+                  lg_grupy_kontrahentow grko
+            WHERE     grko.id = kngr.grkn_id 
+                  AND kngr.konr_id = konr.id)
+           contractor_groups
   FROM ap_kontrahenci konr, ap_kontrahenci konr_payer
  WHERE konr_payer.id(+) = konr.platnik_id AND konr.id IN ( :p_id)',
                         '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
@@ -229,7 +238,10 @@ GROUP BY rndo.symbol_dokumentu,
     </xsl:template>
     <xsl:template priority="2" match="DELIVERY_ADDRESSES/DELIVERY_ADDRESSES_ROW">
         <DELIVERY_ADDRESS><xsl:apply-templates/></DELIVERY_ADDRESS>            
-    </xsl:template>                         
+    </xsl:template>
+    <xsl:template priority="2" match="CONTRACTOR_GROUPS/CONTRACTOR_GROUPS_ROW">
+        <GROUP><xsl:apply-templates/></GROUP>            
+    </xsl:template>
 </xsl:stylesheet>',
                         'IN/contractors',
                         'T',
@@ -441,7 +453,7 @@ GROUP BY rndo.symbol_dokumentu,
              VALUES (
                         jg_sqre_seq.NEXTVAL,
                         'RESERVATIONS',
-                        'SELECT zare.dest_symbol            order_id,
+                        'SELECT zare.dest_symbol         order_id,
                              zare.data_realizacji        realization_date,
                              inma.indeks                 commoditiy_id,
                              zare.ilosc                  quantity_ordered,
@@ -452,8 +464,21 @@ GROUP BY rndo.symbol_dokumentu,
                        WHERE     reze.zare_id = zare.id
                              AND zare.inma_id = inma.id
                              AND reze.id IN (:p_id)',
-                        NULL,
-                        NULL,
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                           <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                             <xsl:template match="@*|node()">
+                               <xsl:copy>
+                                 <xsl:apply-templates select="@*|node()" />
+                               </xsl:copy>
+                             </xsl:template>
+                           <xsl:template priority="2" match="ROW">
+                             <RESERVATION><xsl:apply-templates/></RESERVATION>
+                           </xsl:template>
+                           <xsl:template priority="2" match="RESERVATIONS/RESERVATION">
+                             <RESERVATION><xsl:apply-templates/></RESERVATION>
+                           </xsl:template>
+                        </xsl:stylesheet>',
+                        'OUT/reservations',
                         'N',
                         'OUT');
 
@@ -674,7 +699,7 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                  'IN/payments_methods',
                  'T',
                  'OUT');
-				 
+
     INSERT INTO jg_sql_repository (id,
                                    object_type,
                                    sql_query,
@@ -685,25 +710,69 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
          VALUES (jg_sqre_seq.NEXTVAL,
                  'ORDERS_PATTERNS',
                  'SELECT wzrc.pattern pattern_code, wzrc.name pattern_name, wzrc.up_to_date
-  FROM lg_documents_templates wzrc
- WHERE document_type = ''ZS'' AND wzrc.id IN ( :p_id)',
-                 '<xsl:stylesheet version="1.0"
-xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-  <xsl:output method="xml" version="1.5" indent="yes"
-  omit-xml-declaration="no" />
-  <xsl:template match="@*|node()">
-    <xsl:copy>
-      <xsl:apply-templates select="@*|node()" />
-    </xsl:copy>
-  </xsl:template>
-  <xsl:template priority="2" match="ROW">
-    <ORDER_PATTERN>
-      <xsl:apply-templates />
-    </ORDER_PATTERN>
-  </xsl:template>
-</xsl:stylesheet>',
+                    FROM lg_documents_templates wzrc
+                   WHERE     document_type = ''ZS''
+                         AND wzrc.id IN ( :p_id)',
+                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                    <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                    <xsl:template match="@*|node()">
+                      <xsl:copy>
+                        <xsl:apply-templates select="@*|node()" />
+                      </xsl:copy>
+                    </xsl:template>
+                    <xsl:template priority="2" match="ROW">
+                      <ORDER_PATTERN><xsl:apply-templates /></ORDER_PATTERN>
+                    </xsl:template>
+                  </xsl:stylesheet>',
                  'IN/orders_patterns',
                  'T',
-                 'OUT');				 
+                 'OUT');		
+
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,
+                                   sql_query,
+                                   xslt,
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'DISCOUNTS',
+                 'SELECT prup.guid,
+                         inma.indeks COMMODITY_ID,
+                         konr.symbol CONTRACTOR_ID,
+                         gras.kod COMMODITY_GROUP_CODE,
+                         grod.grupa CONTRACTOR_GROUP_CODE,
+                         prup.data_od DATE_FROM,
+                         prup.data_do DATE_TO,
+                         prup.upust_procentowy PERCENT_DISCOUNT
+                    FROM lg_przyp_upustow prup
+                    LEFT JOIN ap_indeksy_materialowe inma
+                      ON inma.id = prup.inma_id
+                    LEFT JOIN ap_kontrahenci konr
+                      ON konr.id = prup.konr_id
+                    LEFT JOIN ap_grupy_asortymentowe gras
+                      ON gras.id = prup.gras_id
+                    LEFT JOIN ap_grupy_odbiorcow grod
+                      ON grod.id = prup.grod_id
+                   WHERE     prup.upust_procentowy IS NOT NULL
+                         AND prup.domyslny = ''T''
+                         AND prup.id IN (:p_id)',
+                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                     <xsl:template match="@*|node()">
+                        <xsl:copy>
+                           <xsl:apply-templates select="@*|node()" />
+                        </xsl:copy>
+                     </xsl:template>
+                     <xsl:template priority="2" match="ROW">
+                        <DISCOUNT><xsl:apply-templates/></DISCOUNT>
+                     </xsl:template>
+                     <xsl:template priority="2" match="DISCOUNTS/DISCOUNT">
+                        <DISCOUNT><xsl:apply-templates/></DISCOUNT>
+                     </xsl:template>
+                  </xsl:stylesheet>',
+                 'IN/discounts',
+                 'T',
+                 'OUT');
 END;
 /
