@@ -774,5 +774,52 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                  'IN/discounts',
                  'T',
                  'OUT');
+
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,
+                                   sql_query,
+                                   xslt,
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'WAREHOUSES',
+                 'SELECT maga.kod ID,
+                         maga.nazwa NAME,
+                         CURSOR (
+                             SELECT inma1.indeks COMMODITY_ID,
+                                    stma1.stan_goracy QUANTITY
+                               FROM ap_stany_magazynowe stma1,
+                                    ap_indeksy_materialowe inma1,
+                                    ap_magazyny maga1
+                              WHERE     inma1.id = stma1.suob_inma_id
+                                    AND maga1.id = stma1.suob_maga_id
+                                    AND stma1.id IN (:p_id)
+                                    AND maga1.kod = maga.kod
+                         ) STOCKS
+                    FROM ap_stany_magazynowe stma,
+                         ap_magazyny maga
+                   WHERE     stma.suob_maga_id = maga.id
+                         AND stma.id IN (:p_id)
+                GROUP BY maga.kod,
+                         maga.nazwa',                    
+                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                    <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                    <xsl:template match="@*|node()">
+                      <xsl:copy>
+                        <xsl:apply-templates select="@*|node()" />
+                      </xsl:copy>
+                    </xsl:template>
+                    <xsl:template priority="2" match="ROW">
+                      <WAREHOUSE><xsl:apply-templates/></WAREHOUSE>
+                    </xsl:template>
+                    <xsl:template priority="2" match="STOCKS/STOCKS_ROW">
+                      <STOCK><xsl:apply-templates/></STOCK>
+                    </xsl:template>
+                  </xsl:stylesheet>',
+                  'IN/warehouses',
+                  'T',
+                  'OUT');
+
 END;
 /
