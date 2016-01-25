@@ -431,4 +431,16 @@ BEGIN
 END;
 /
 
+CREATE OR REPLACE TRIGGER jg_warehouse_observe
+    BEFORE INSERT OR UPDATE OF stan_goracy
+    ON ap_stany_magazynowe
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    jg_obop_def.add_operation (p_object_id        => :new.id,
+                               p_object_type      => 'WAREHOUSES',
+                               p_operation_type   => 'UPDATE');
+END;
+/
+
 
