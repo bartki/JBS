@@ -821,5 +821,79 @@ xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                   'T',
                   'OUT');
 
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,
+                                   sql_query,
+                                   xslt,
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'CONTRACTS',
+                        'SELECT umsp.symbol       ID,
+                                umsp.konr_id_pl   CONTRACTOR_ID,
+                                umsp.data_od      DATE_FROM,
+                                umsp.data_do      DATE_TO,
+                                wzrc.nazwa        CONTRACT_DESTINATION,                                
+                                umsp1.contract_value,
+                                (SELECT SUM(Lg_Ums_Uiwl_Def.Wartosc_Zrl_Z_Dosi(p_uiwl_id => umsi.id))
+                                   FROM lg_ums_umowy_sprz_it umsi
+                                  WHERE umsi.umsp_id = umsp.id) CONTRACT_VALUE_REALIZED,
+                                CASE WHEN umsp1.splata - (umsp1.contract_value / umsp1.duration) * (FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from))) < 0 THEN ''T'' ELSE ''N'' END DELAYED,
+                                CASE WHEN (umsp1.contract_value / umsp1.duration) * FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from)) - umsp1.splata > (umsp1.contract_value / umsp1.duration) * 3 THEN ''N'' ELSE ''T'' END CAN_SKIP_REPAYMENT,
+                                CURSOR (
+                                     SELECT inma.indeks COMMODITY_ID,
+                                            CURSOR (
+                                                SELECT pobu.data_od DATE_FROM,
+                                                       pobu.data_do DATE_TO,
+                                                       pobu.wartosc VALUE,
+                                                       NVL(Lg_Ums_Pobu_Def.Wartosc_Zrl_Z_Dosi(pobu.id), 0) VALUE_REALIZED
+                                                  FROM lg_ums_pozycje_budzetu_umsi pobu
+                                                 WHERE pobu.umsi_id = umsi.id) PERIODS
+                                       FROM lg_ums_umowy_sprz_it umsi,
+                                            ap_indeksy_materialowe inma
+                                      WHERE     inma.id = umsi.inma_id
+                                            AND umsi.umsp_id = umsp.id) LINES
+                           FROM lg_ums_umowy_sprz umsp,
+                                lg_wzorce wzrc,                                
+                                (SELECT ID,
+                                       (SELECT SUM(pobu.wartosc) 
+                                           FROM lg_ums_pozycje_budzetu_umsi pobu,
+                                                lg_ums_umowy_sprz_it umsi
+                                          WHERE     pobu.umsi_id = umsi.id                                                
+                                                AND umsi.umsp_id = umsp.id) CONTRACT_VALUE,
+                                       (SELECT NVL(SUM (umru.wartosc), 0)
+                                          FROM lg_ums_realizacje_umsi umru,
+                                               lg_ums_umowy_sprz_it umsi
+                                         WHERE umsi.id = umru.uiwl_id
+                                               AND umsi.umsp_id = umsp.id) SPLATA,
+                                         NVL(ADD_MONTHS (umsp.data_do, -umsp.atrybut_n01) + 1, umsp.data_od) AS DATE_FROM,
+                                         atrybut_n01 DURATION
+                                  FROM lg_ums_umowy_sprz umsp) umsp1
+                          WHERE     wzrc.id = umsp.wzrc_id
+                                AND umsp.id = umsp1.id
+                                AND umsp.id IN (:p_id)',
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                         <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                         <xsl:template match="@*|node()">
+                            <xsl:copy>
+                               <xsl:apply-templates select="@*|node()" />
+                            </xsl:copy>
+                         </xsl:template>
+                         <xsl:template priority="2" match="ROW">
+                            <CONTRACT><xsl:apply-templates/></CONTRACT>            
+                         </xsl:template>
+                         <xsl:template priority="2" match="LINES/LINES_ROW">
+                            <LINE><xsl:apply-templates/></LINE>            
+                         </xsl:template>
+                         <xsl:template priority="2" match="PERIODS/PERIODS_ROW">
+                            <PERIOD><xsl:apply-templates/></PERIOD>            
+                         </xsl:template>
+                         </xsl:stylesheet>',
+                        'IN/contracts',
+                        'T',
+                        'OUT');
+
 END;
 /

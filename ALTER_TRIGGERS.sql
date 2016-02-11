@@ -442,5 +442,25 @@ BEGIN
                                p_operation_type   => 'UPDATE');
 END;
 /
+CREATE OR REPLACE TRIGGER jg_umsp_observe
+    BEFORE INSERT OR DELETE OR UPDATE
+    ON lg_ums_umowy_sprz
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF (INSERTING OR UPDATING) AND :NEW.ZATWIERDZONA = 'T' AND NVL(:OLD.ZATWIERDZONA,'N') = 'N' 
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :new.id,
+                                   p_object_type      => 'CONTRACTS',
+                                   p_operation_type   => 'INSERT');    
+    ELSIF (DELETING) OR (UPDATING) AND :OLD.ZATWIERDZONA = 'T' AND NVL(:NEW.ZATWIERDZONA,'N') = 'N' 
+    THEN
+        jg_obop_def.add_operation (p_object_id        => :NEW.id,
+                                   p_object_type      => 'CONTRACTS',
+                                   p_operation_type   => 'DELETE');
+    END IF;
+END;
+/
+
 
 
