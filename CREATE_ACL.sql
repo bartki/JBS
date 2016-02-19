@@ -3,9 +3,9 @@
 
 DECLARE
     acl_name             VARCHAR2(30) := 'utl_tcp.xml';
-    ftp_server_ip        VARCHAR2(20) := '85.17.73.180';
-    ftp_server_name      VARCHAR2(20) := 'jurag.cba.pl';
-    username             VARCHAR2(30) := 'PM_DEVELOP_ADM';
+    ftp_server_ip        VARCHAR2(20) := '193.202.117.201';
+    ftp_server_name      VARCHAR2(20) := 'INFINITE_FTP';
+    username             VARCHAR2(30) := 'TETA_ADMIN';
 BEGIN
     dbms_network_acl_admin.create_acl (
         acl         => acl_name,
@@ -40,3 +40,4 @@ BEGIN
         upper_port => NULL);
     commit;
 END;
+/
