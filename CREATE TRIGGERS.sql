@@ -445,3 +445,14 @@ BEGIN
     jg_obop_def.add_operation (p_object_id => :NEW.id, p_object_type => 'WAREHOUSES', p_operation_type => 'UPDATE');
 END;
 /
+CREATE OR REPLACE TRIGGER jg_order_patterns
+    BEFORE INSERT OR UPDATE ON lg_documents_templates
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF :NEW.document_type IN ('ZS', 'ZE')
+    THEN
+        jg_obop_def.add_operation (p_object_id => :NEW.id, p_object_type => 'ORDERS_PATTERNS', p_operation_type => 'UPDATE');
+    END IF;
+END;
+/
