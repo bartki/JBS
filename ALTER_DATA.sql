@@ -446,28 +446,56 @@ BEGIN
                  'T',
                  'OUT');
 
-    INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
-         VALUES (jg_sqre_seq.NEXTVAL,
-                 'SALES_REPRESENTATIVES',
-                 'SELECT osol.kod         code,
-                         osol.first_name,
-                         osol.surname,
-                         osol.atrybut_t01 region,
-                         osol.aktualna    up_to_date,
-                         CURSOR (SELECT konr.symbol customer_number
-                                   FROM ap_kontrahenci konr,
-                                        lg_kontrahenci_grup kngr,
-                                        (SELECT *
-                                           FROM lg_grupy_kontrahentow
-                                          START WITH id = 63
-                                        CONNECT BY PRIOR id = grkn_id) grkn
-                                          WHERE     kngr.konr_id = konr.id
-                                                AND kngr.grkn_id = grkn.id
-                                                AND grkn.nazwa = osol.atrybut_t01) contractors
-                    FROM lg_osoby_log osol
-                   WHERE     atrybut_t01 IS NOT NULL
-                         AND osol.id IN (:p_id)',
-                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+INSERT INTO jg_sql_repository (id,
+                               object_type,
+                               sql_query,
+                               xslt,
+                               file_location,
+                               up_to_date,
+                               direction)
+         VALUES (
+                    jg_sqre_seq.NEXTVAL,
+                    'SALES_REPRESENTATIVES',
+                    'SELECT okgi.id,
+       osby.imie || '' '' || osby.nazwisko AS name,
+          osby.imie
+       || '',''
+       || osby.nazwisko
+       || '',''
+       || osol.kod
+       || '',''
+       || osol.atrybut_t01
+       || '',T''
+           AS id_erp,
+       1 AS active,
+       TRANSLATE (osby.imie || ''.'' || osby.nazwisko || ''.JBS'',
+                  ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
+                  ''AaCcEeLlNnOoSsZzZz'')
+           AS userlogin,
+       TRANSLATE (
+           SUBSTR (osby.imie, 1, 1) || ''.'' || osby.nazwisko || ''@GOLDWELL.PL'',
+           ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
+           ''AaCcEeLlNnOoSsZzZz'')
+           AS login,
+       okgi.atrybut_t02 AS phone,
+       okgi.id AS area_id,
+       CURSOR (
+           SELECT konr.symbol customer_number
+             FROM ap_kontrahenci konr,
+                  lg_kontrahenci_grup kngr,
+                  (    SELECT *
+                         FROM lg_grupy_kontrahentow
+                   START WITH id = 63
+                   CONNECT BY PRIOR id = grkn_id) grkn
+            WHERE     kngr.konr_id = konr.id
+                  AND kngr.grkn_id = grkn.id
+                  AND grkn.nazwa = osol.atrybut_t01)
+           contractors
+  FROM lg_osoby_log osol, pa_osoby osby, ap_okregi_sprzedazy okgi
+ WHERE     okgi.symbol = osol.atrybut_t01
+       AND osol.id IN ( :p_id)
+       AND osol.osby_id = osby.id',
+                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -483,9 +511,9 @@ BEGIN
                         <CONTRACTOR><xsl:apply-templates/></CONTRACTOR>
                      </xsl:template>
                   </xsl:stylesheet>',
-                 'IN/sales_representatives',
-                 'T',
-                 'OUT');
+                    'IN/sales_representatives',
+                    'T',
+                    'OUT');
 
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
          VALUES (jg_sqre_seq.NEXTVAL,
