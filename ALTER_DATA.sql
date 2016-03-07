@@ -472,12 +472,14 @@ INSERT INTO jg_sql_repository (id,
                   ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
                   ''AaCcEeLlNnOoSsZzZz'')
            AS userlogin,
+       osby.imie username,
+       osby.nazwisko usersurname,
        TRANSLATE (
            SUBSTR (osby.imie, 1, 1) || ''.'' || osby.nazwisko || ''@GOLDWELL.PL'',
            ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
            ''AaCcEeLlNnOoSsZzZz'')
-           AS login,
-       okgi.atrybut_t02 AS phone,
+           AS useremail,
+       okgi.atrybut_t02 AS userphone,
        okgi.id AS area_id,
        CURSOR (
            SELECT konr.symbol customer_number
