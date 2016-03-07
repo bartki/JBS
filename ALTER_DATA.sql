@@ -4,34 +4,39 @@ BEGIN
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'INVOICES_PAYMENTS',
-                 'SELECT rndo.symbol_dokumentu invoice_number,
-                         rndo.termin_platnosci due_date,
-                         rndo.forma_platnosci payment_form,
-                         konr.symbol payer_symbol,
-                         konr.nazwa payer_name,
-                         jg_output_sync.format_number(rndo.wartosc_dok_z_kor_wwb, 2) total,
-                         jg_output_sync.format_number(rndo.poz_do_zaplaty_dok_z_kor_wwb, 2) amount_left,
-                         CURSOR (SELECT rnwp.symbol_dokumentu payment_doc_number,
-                                        rnwp.data_dokumentu payment_date,
-                                        jg_output_sync.format_number(rnwp.zaplata_wwb, 2) amount_paid
-                                   FROM rk_rozr_nal_dok_plat_rk_vw rnwp
-                                  WHERE     rnwp.rndo_id = rndo.rndo_id
-                                        AND rnwp.zaplata_wwb IS NOT NULL
-                                        AND rnwp.typ = '' P '') payments_details
-                    FROM rk_rozr_nal_dokumenty_vw rndo, ap_kontrahenci konr
-                   WHERE     konr.id = rndo.konr_id
-                         AND rndo.rnwp_rnwp_id IS NULL
-                         AND rndo.typ IN ('' FAK '', '' KOR '')
-                         AND rndo.rndo_id IN (:p_id)
-                GROUP BY rndo.symbol_dokumentu,
-                         rndo.termin_platnosci,
-                         rndo.forma_platnosci,
-                         konr.id,
-                         konr.symbol,
-                         konr.nazwa,
-                         rndo.wartosc_dok_z_kor_wwb,
-                         rndo.poz_do_zaplaty_dok_z_kor_wwb,
-                         rndo.rndo_id',
+                 '    SELECT rndo.symbol_dokumentu invoice_number,
+         rndo.data_dokumentu invoice_date,
+         rndo.termin_platnosci due_date,
+         rndo.forma_platnosci payment_form,
+         konr.symbol payer_symbol,
+         konr.nazwa payer_name,
+         jg_output_sync.format_number (rndo.wartosc_dok_z_kor_wwb, 2) total,
+         jg_output_sync.format_number (rndo.poz_do_zaplaty_dok_z_kor_wwb, 2)
+             amount_left,
+         CURSOR (
+             SELECT rnwp.symbol_dokumentu payment_doc_number,
+                    rnwp.data_dokumentu payment_date,
+                    jg_output_sync.format_number (rnwp.zaplata_wwb, 2)
+                        amount_paid
+               FROM rk_rozr_nal_dok_plat_rk_vw rnwp
+              WHERE     rnwp.rndo_id = rndo.rndo_id
+                    AND rnwp.zaplata_wwb IS NOT NULL
+                    AND rnwp.typ = ''P'')
+             payments_details
+    FROM rk_rozr_nal_dokumenty_vw rndo, ap_kontrahenci konr
+   WHERE     konr.id = rndo.konr_id
+         AND rndo.rnwp_rnwp_id IS NULL
+         AND rndo.typ IN (''FAK'', ''KOR'')
+         AND rndo.rndo_id IN ( :p_id)
+GROUP BY rndo.symbol_dokumentu,
+         rndo.termin_platnosci,
+         rndo.forma_platnosci,
+         konr.id,
+         konr.symbol,
+         konr.nazwa,
+         rndo.wartosc_dok_z_kor_wwb,
+         rndo.poz_do_zaplaty_dok_z_kor_wwb,
+         rndo.rndo_id',
                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
