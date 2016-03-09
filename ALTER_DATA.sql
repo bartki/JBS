@@ -36,7 +36,7 @@ GROUP BY rndo.symbol_dokumentu,
          konr.nazwa,
          rndo.wartosc_dok_z_kor_wwb,
          rndo.poz_do_zaplaty_dok_z_kor_wwb,
-         rndo.rndo_id',
+         rndo.rndo_id, rndo.data_dokumentu',
                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
