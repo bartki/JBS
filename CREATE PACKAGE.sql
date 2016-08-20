@@ -1130,7 +1130,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             po_object_type  := 'ORDER';
             po_on_time      := 'T';
         ELSE
-            assert (FALSE, 'Nie uda³o siê okreœliæ typu obiektu na podstawie pliku');
+            assert (FALSE, 'Nie udaÂ³o siÃª okreÂœliÃ¦ typu obiektu na podstawie pliku');
         END IF;
     END;
 
@@ -1556,8 +1556,7 @@ CREATE OR REPLACE PACKAGE BODY jg_output_sync IS
             RETURN 0;
         END IF;
 
-        RETURN TRIM (TRAILING 0 FROM TRIM (TO_CHAR (ROUND (p_number, p_digit),
-                                                    '9999999999999999999999999999990.000000000000000000')));
+        RETURN TRIM (TRAILING '.' FROM (TRIM (TRAILING 0 FROM TRIM (TO_CHAR (ROUND (p_number, p_digit), '9999999999999999999999999999990.000000000000000000')))));
     END;
 
     FUNCTION sqre_rt (
