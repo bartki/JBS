@@ -1989,3 +1989,41 @@ CREATE OR REPLACE PACKAGE BODY jg_output_sync IS
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
+CREATE OR REPLACE FUNCTION jg_dynamic_set_commponents (
+    p_skkp_id    lg_kpl_skladniki_kompletu.id%TYPE)
+    RETURN pa_lista_id.tt_lista_id PIPELINED AS
+------------------------------------------------------------------------------------------------------------------------
+    c_inma      SYS_REFCURSOR;
+    v_inma_id   ap_indeksy_materialowe.id%TYPE;
+    v_sql       lg_kpl_skladniki_kompletu.sql_stmt%TYPE;
+BEGIN
+    FOR r_skkp IN (SELECT sql_stmt
+                     FROM lg_kpl_skladniki_kompletu skkp
+                    WHERE skkp.id = p_skkp_id)
+    LOOP
+        v_sql := r_skkp.sql_stmt;
+    END LOOP;
+
+    IF v_sql IS NOT NULL
+    THEN
+        OPEN c_inma FOR v_sql;
+
+        LOOP
+            FETCH c_inma INTO v_inma_id;
+
+            EXIT WHEN c_inma%NOTFOUND;
+            PIPE ROW (v_inma_id);
+        END LOOP;
+
+        CLOSE c_inma;
+    END IF;
+
+    RETURN;
+EXCEPTION
+    WHEN OTHERS
+    THEN
+        CLOSE c_inma;
+
+        RETURN;
+END;
+/
