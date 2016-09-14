@@ -456,3 +456,102 @@ BEGIN
     END IF;
 END;
 /
+CREATE OR REPLACE TRIGGER jg_support_fund_observe
+    BEFORE INSERT OR DELETE OR UPDATE
+    ON lg_sal_invoices
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN  
+    IF    INSERTING
+       OR UPDATING
+    THEN
+        jg_obop_def.add_operation (p_object_id          => :NEW.id,
+                                   p_object_type        => 'SUPPORT_FUNDS',
+                                   p_operation_type     => 'UPDATE');
+    ELSIF DELETING
+    THEN
+        jg_obop_def.add_operation (p_object_id          => :OLD.id,
+                                   p_object_type        => 'SUPPORT_FUNDS',
+                                   p_operation_type     => 'DELETE');
+    END IF;
+END;
+/
+CREATE OR REPLACE TRIGGER jg_loyality_points_observe
+    BEFORE INSERT OR DELETE OR UPDATE
+    ON lg_plo_punkty_kontrahenta
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN  
+    IF    INSERTING
+       OR UPDATING
+    THEN
+        jg_obop_def.add_operation (p_object_id          => :NEW.id,
+                                   p_object_type        => 'LOYALITY_POINTS',
+                                   p_operation_type     => 'UPDATE');
+    ELSIF DELETING
+    THEN
+        jg_obop_def.add_operation (p_object_id          => :OLD.id,
+                                   p_object_type        => 'LOYALITY_POINTS',
+                                   p_operation_type     => 'DELETE');
+    END IF;
+END;
+/
+CREATE OR REPLACE TRIGGER jg_trade_contracts_observe
+    BEFORE INSERT OR UPDATE OF atrybut_t07, atrybut_n05, atrybut_n02, atrybut_n03, foza_kod, limit_kredytowy, dni_do_zaplaty, atrybut_n04   
+    ON ap_kontrahenci
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF :NEW.atrybut_t05 IS NULL
+    THEN
+        RETURN;
+    END IF;
+    
+    IF    INSERTING
+       OR UPDATING
+    THEN
+        IF :NEW.atrybut_t05 like '%UM IND%'
+        THEN
+            jg_obop_def.add_operation (p_object_id          => :NEW.id,
+                                       p_object_type        => 'TRADE_CONTRACTS_INDIVIDUAL',
+                                       p_operation_type     => 'UPDATE');
+        ELSE
+            jg_obop_def.add_operation (p_object_id          => :NEW.id,
+                                       p_object_type        => 'TRADE_CONTRACTS',
+                                       p_operation_type     => 'UPDATE');
+        END IF;
+    END IF;
+END;
+/
+CREATE OR REPLACE TRIGGER jg_deliveries_observe
+    BEFORE INSERT OR UPDATE OF wskaznik_zatwierdzenia
+    ON ap_dokumenty_obrot
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF     NVL(:OLD.wskaznik_zatwierdzenia, 'N') = 'N'
+       AND :NEW.wskaznik_zatwierdzenia = 'T'
+       AND :NEW.wzty_kod IN ('WZ')
+       AND :NEW.numer_zamowienia IS NOT NULL
+    THEN
+        jg_obop_def.add_operation (p_object_id          => :NEW.id,
+                                   p_object_type        => 'DELIVERIES',
+                                   p_operation_type     => 'UPDATE');
+    END IF;
+END;
+/
+CREATE OR REPLACE TRIGGER jg_attachments_observe
+    BEFORE INSERT OR UPDATE
+    ON pa_attachments
+    REFERENCING NEW AS NEW OLD AS OLD
+    FOR EACH ROW
+BEGIN
+    IF Pa_Atki_Agd.code(p_id => :NEW.Atki_Id) IN ('KONTRAKT')
+    THEN
+        jg_obop_def.add_operation (p_object_id          => :NEW.id,
+                                   p_object_type        => 'CONTRACT_ATTACHMENT',
+                                   p_operation_type     => 'UPDATE',
+                                   p_attachemnt         => 'T');
+    END IF;
+END;
+/
