@@ -551,7 +551,7 @@ BEGIN
         jg_obop_def.add_operation (p_object_id          => :NEW.id,
                                    p_object_type        => 'CONTRACT_ATTACHMENT',
                                    p_operation_type     => 'UPDATE',
-                                   p_attachemnt         => 'T');
+                                   p_attachment         => 'T');
     END IF;
 END;
 /
