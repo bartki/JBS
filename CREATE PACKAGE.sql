@@ -904,7 +904,21 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
-
+CREATE OR REPLACE PACKAGE JG_FTP_CONFIGURATION IS
+------------------------------------------------------------------------------------------------------------------------
+  
+    sf_ftp_host                  VARCHAR2(30) := '193.202.117.201';
+    sf_ftp_user                  VARCHAR2(30) := 'jbs';
+    sf_ftp_password              VARCHAR2(30) := 'p6ucuyUk';
+    sf_ftp_port                  PLS_INTEGER  := 21;    
+    
+    sf_ftp_in_folder             VARCHAR2(30) := 'IN';
+    sf_ftp_out_folder            VARCHAR2(30) := 'OUT';
+    sf_ftp_out_archive_folder    VARCHAR2(30) := 'OUT/Archive';
+    
+------------------------------------------------------------------------------------------------------------------------
+END;
+/
 CREATE OR REPLACE PACKAGE jg_input_sync IS
 ------------------------------------------------------------------------------------------------------------------------
     sf_order_wzrc_id                lg_documents_templates.id%TYPE := 1000692;
@@ -918,17 +932,19 @@ CREATE OR REPLACE PACKAGE jg_input_sync IS
 END;
 /
 
-CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE send_response IS
-        v_ctx                           DBMS_XMLSAVE.ctxtype;
-        v_xml_clob                      CLOB;
-        v_xml_type                      XMLTYPE;
-        r_current_format                pa_xmltype.tr_format;
-        v_sql_query                     VARCHAR2 (4000);
-        v_oryginal_id                   VARCHAR2 (100);
+CREATE OR REPLACE PACKAGE BODY jg_input_sync
+IS
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_response
+    IS
+        v_ctx              DBMS_XMLSAVE.ctxtype;
+        v_xml_clob         CLOB;
+        v_xml_type         XMLTYPE;
+        r_current_format   pa_xmltype.tr_format;
+        v_sql_query        VARCHAR2 (4000);
+        v_oryginal_id      VARCHAR2 (100);
     BEGIN
-        r_current_format  := pa_xmltype.biezacy_format;
+        r_current_format := pa_xmltype.biezacy_format;
         pa_xmltype.set_short_format_xml ();
 
         FOR r_oulo IN (SELECT id,
@@ -940,18 +956,21 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         LOOP
             IF r_oulo.object_type = 'ORDER'
             THEN
-                v_oryginal_id  := NULL;
+                v_oryginal_id := NULL;
 
                 BEGIN
-                    v_oryginal_id  := pa_xmltype.wartosc (px_xml => XMLTYPE (r_oulo.xml), p_sciezka => '/Order/ID');
+                    v_oryginal_id :=
+                        pa_xmltype.wartosc (px_xml      => xmltype (r_oulo.xml),
+                                            p_sciezka   => '/Order/ID');
                 EXCEPTION
                     WHEN OTHERS
                     THEN
-                        v_oryginal_id  := 'TO_CHAR(NULL)';
+                        v_oryginal_id := 'TO_CHAR(NULL)';
                 END;
 
-                v_sql_query    :=
-                    'SELECT ' || v_oryginal_id
+                v_sql_query :=
+                       'SELECT '
+                    || v_oryginal_id
                     || ' ID,
                                status,
                                TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
@@ -965,20 +984,22 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                           FROM jg_input_log inlo
                          WHERE id ='
                     || r_oulo.id;
-                v_ctx          := DBMS_XMLGEN.newcontext (querystring => v_sql_query);
+                v_ctx := DBMS_XMLGEN.newcontext (querystring => v_sql_query);
                 DBMS_XMLGEN.setrowtag (v_ctx, 'ORDER_RESPONSE');
                 DBMS_XMLGEN.setrowsettag (v_ctx, NULL);
-                v_xml_type     := DBMS_XMLGEN.getxmltype (v_ctx);
+                v_xml_type := DBMS_XMLGEN.getxmltype (v_ctx);
                 pa_xmltype.ustaw_format (r_current_format);
                 DBMS_XMLGEN.closecontext (v_ctx);
 
                 IF v_xml_type IS NOT NULL
                 THEN
-                    v_xml_clob  := v_xml_type.getclobval ();
+                    v_xml_clob := v_xml_type.getclobval ();
 
                     BEGIN
-                        jg_output_sync.send_text_file_to_ftp (p_xml           => v_xml_clob,
-                                                              p_file_name     => '/IN/Response_' || r_oulo.file_name);
+                        jg_output_sync.send_text_file_to_ftp (
+                            p_xml         => v_xml_clob,
+                            p_file_name   =>    '/IN/Response_'
+                                             || r_oulo.file_name);
 
                         UPDATE jg_input_log
                            SET xml_response = v_xml_clob
@@ -991,18 +1012,21 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 END IF;
             ELSIF r_oulo.object_type = 'NEW_CONTRACTORS'
             THEN
-                v_oryginal_id  := NULL;
+                v_oryginal_id := NULL;
 
                 BEGIN
-                    v_oryginal_id  := pa_xmltype.wartosc (px_xml => XMLTYPE (r_oulo.xml), p_sciezka => '/Order/ID');
+                    v_oryginal_id :=
+                        pa_xmltype.wartosc (px_xml      => xmltype (r_oulo.xml),
+                                            p_sciezka   => '/Order/ID');
                 EXCEPTION
                     WHEN OTHERS
                     THEN
-                        v_oryginal_id  := 'TO_CHAR(NULL)';
+                        v_oryginal_id := 'TO_CHAR(NULL)';
                 END;
 
-                v_sql_query    :=
-                    'SELECT ' || v_oryginal_id
+                v_sql_query :=
+                       'SELECT '
+                    || v_oryginal_id
                     || ' ID,
                                status,
                                TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
@@ -1016,20 +1040,22 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                           FROM jg_input_log inlo
                          WHERE id ='
                     || r_oulo.id;
-                v_ctx          := DBMS_XMLGEN.newcontext (querystring => v_sql_query);
+                v_ctx := DBMS_XMLGEN.newcontext (querystring => v_sql_query);
                 DBMS_XMLGEN.setrowtag (v_ctx, 'ORDER_RESPONSE');
                 DBMS_XMLGEN.setrowsettag (v_ctx, NULL);
-                v_xml_type     := DBMS_XMLGEN.getxmltype (v_ctx);
+                v_xml_type := DBMS_XMLGEN.getxmltype (v_ctx);
                 pa_xmltype.ustaw_format (r_current_format);
                 DBMS_XMLGEN.closecontext (v_ctx);
 
                 IF v_xml_type IS NOT NULL
                 THEN
-                    v_xml_clob  := v_xml_type.getclobval ();
+                    v_xml_clob := v_xml_type.getclobval ();
 
                     BEGIN
-                        jg_output_sync.send_file_to_ftp (p_xml           => v_xml_clob,
-                                                         p_file_name     => '/IN/Response_' || r_oulo.file_name);
+                        jg_output_sync.send_text_file_to_ftp (
+                            p_xml         => v_xml_clob,
+                            p_file_name   =>    '/IN/Response_'
+                                             || r_oulo.file_name);
 
                         UPDATE jg_input_log
                            SET xml_response = v_xml_clob
@@ -1044,149 +1070,163 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         END LOOP;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_xslt_from_repository (
-        p_object_type                   IN      jg_xslt_repository.object_type%TYPE)
-        RETURN jg_xslt_repository.xslt%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        CURSOR c_xslt (
-            pc_object_type                          jg_xslt_repository.object_type%TYPE) IS
+        p_object_type   IN jg_xslt_repository.object_type%TYPE)
+        RETURN jg_xslt_repository.xslt%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_xslt (pc_object_type jg_xslt_repository.object_type%TYPE)
+        IS
             SELECT xslt
               FROM jg_xslt_repository
              WHERE object_type = pc_object_type;
 
-        v_xslt                          jg_xslt_repository.xslt%TYPE;
+        v_xslt   jg_xslt_repository.xslt%TYPE;
     BEGIN
         OPEN c_xslt (p_object_type);
 
-        FETCH c_xslt
-         INTO v_xslt;
+        FETCH c_xslt INTO v_xslt;
 
         CLOSE c_xslt;
 
         IF v_xslt IS NULL
         THEN
-            assert (FALSE, 'Brak zdefiniowanego szablonu xslt dla obiektu o typie ''' || p_object_type || '');
+            assert (
+                FALSE,
+                   'Brak zdefiniowanego szablonu xslt dla obiektu o typie '''
+                || p_object_type
+                || '');
         END IF;
 
         RETURN v_xslt;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_query_from_sql_repository (
-        p_object_type                   IN      jg_input_log.object_type%TYPE)
-        RETURN jg_sql_repository.sql_query%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
+        p_object_type   IN jg_input_log.object_type%TYPE)
+        RETURN jg_sql_repository.sql_query%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         CURSOR c_sql_query (
-            pc_object_type                          jg_sql_repository.object_type%TYPE) IS
+            pc_object_type    jg_sql_repository.object_type%TYPE)
+        IS
             SELECT sql_query
               FROM jg_sql_repository
              WHERE object_type = pc_object_type;
 
-        v_sql_query                     jg_sql_repository.sql_query%TYPE;
+        v_sql_query   jg_sql_repository.sql_query%TYPE;
     BEGIN
         OPEN c_sql_query (p_object_type);
 
-        FETCH c_sql_query
-         INTO v_sql_query;
+        FETCH c_sql_query INTO v_sql_query;
 
         CLOSE c_sql_query;
 
         IF v_sql_query IS NULL
         THEN
-            assert (FALSE, 'Brak zdefiniowanego zapytania dla obiektu o typie ''' || p_object_type || '');
+            assert (
+                FALSE,
+                   'Brak zdefiniowanego zapytania dla obiektu o typie '''
+                || p_object_type
+                || '');
         END IF;
 
         RETURN v_sql_query;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE determine_object_type (
-        p_xml                           IN      CLOB,
-        po_object_type                  OUT     jg_input_log.object_type%TYPE,
-        po_on_time                      OUT     jg_input_log.on_time%TYPE) IS
-------------------------------------------------------------------------------------------------------------------------
-        CURSOR c_main_node_name (
-            pc_xml                                  XMLTYPE) IS
+        p_xml            IN     CLOB,
+        po_object_type      OUT jg_input_log.object_type%TYPE,
+        po_on_time          OUT jg_input_log.on_time%TYPE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_main_node_name (pc_xml XMLTYPE)
+        IS
             SELECT t_xml.COLUMN_VALUE.getrootelement () nodes
               FROM TABLE (XMLSEQUENCE (pc_xml)) t_xml;
 
-        v_object_type                   jg_input_log.object_type%TYPE;
+        v_object_type   jg_input_log.object_type%TYPE;
     BEGIN
-        po_object_type  := NULL;
+        po_object_type := NULL;
 
-        OPEN c_main_node_name (XMLTYPE (p_xml));
+        OPEN c_main_node_name (xmltype (p_xml));
 
-        FETCH c_main_node_name
-         INTO v_object_type;
+        FETCH c_main_node_name INTO v_object_type;
 
         CLOSE c_main_node_name;
 
         IF INSTR (UPPER (v_object_type), 'NEWCUSTOMER') > 0
         THEN
-            po_object_type  := 'NEW_CUSTOMER';
-            po_on_time      := 'T';
+            po_object_type := 'NEW_CUSTOMER';
+            po_on_time := 'T';
         ELSIF INSTR (UPPER (v_object_type), 'CUSTOMERDATA') > 0
         THEN
-            po_object_type  := 'CUSTOMER_DATA';
-            po_on_time      := 'T';
+            po_object_type := 'CUSTOMER_DATA';
+            po_on_time := 'T';
         ELSIF INSTR (UPPER (v_object_type), 'ORDER') > 0
         THEN
-            po_object_type  := 'ORDER';
-            po_on_time      := 'T';
+            po_object_type := 'ORDER';
+            po_on_time := 'T';
         ELSE
-            assert (FALSE, 'Nie uda³o siê okreliæ typu obiektu na podstawie pliku');
+            assert (
+                FALSE,
+                'Nie udało się określić typu obiektu na podstawie pliku');
         END IF;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION create_xml (
-        p_sql_query                     IN      jg_sql_repository.sql_query%TYPE,
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE)
-        RETURN CLOB IS
-------------------------------------------------------------------------------------------------------------------------
-        v_ctx                           DBMS_XMLSAVE.ctxtype;
-        v_xml                           CLOB;
-        r_current_format                pa_xmltype.tr_format;
+        p_sql_query     IN jg_sql_repository.sql_query%TYPE,
+        p_object_type   IN jg_sql_repository.object_type%TYPE)
+        RETURN CLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_ctx              DBMS_XMLSAVE.ctxtype;
+        v_xml              CLOB;
+        r_current_format   pa_xmltype.tr_format;
     BEGIN
-        r_current_format  := pa_xmltype.biezacy_format;
+        r_current_format := pa_xmltype.biezacy_format;
         pa_xmltype.set_short_format_xml ();
-        v_ctx             := DBMS_XMLGEN.newcontext (querystring => p_sql_query);
+        v_ctx := DBMS_XMLGEN.newcontext (querystring => p_sql_query);
         DBMS_XMLGEN.setrowsettag (v_ctx, NULL);
         DBMS_XMLGEN.setrowtag (v_ctx, p_object_type);
-        v_xml             := DBMS_XMLGEN.getxml (v_ctx);
+        v_xml := DBMS_XMLGEN.getxml (v_ctx);
         DBMS_XMLGEN.closecontext (v_ctx);
         pa_xmltype.ustaw_format (r_current_format);
         RETURN v_xml;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION transform_xml (
-        p_xml                           IN      CLOB,
-        p_object_type                   IN      jg_xslt_repository.object_type%TYPE)
-        RETURN XMLTYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xslt                          jg_xslt_repository.xslt%TYPE;
-        v_xml                           XMLTYPE;
-        r_current_format                pa_xmltype.tr_format;
-        v_result                        XMLTYPE;
+        p_xml           IN CLOB,
+        p_object_type   IN jg_xslt_repository.object_type%TYPE)
+        RETURN XMLTYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xslt             jg_xslt_repository.xslt%TYPE;
+        v_xml              XMLTYPE;
+        r_current_format   pa_xmltype.tr_format;
+        v_result           XMLTYPE;
     BEGIN
-        r_current_format  := pa_xmltype.biezacy_format;
+        r_current_format := pa_xmltype.biezacy_format;
         pa_xmltype.set_short_format_xml ();
-        v_xslt            := get_xslt_from_repository (p_object_type => p_object_type);
-        v_xml             := XMLTYPE.createxml (p_xml);
-        v_result          := v_xml.transform (v_xslt);
+        v_xslt := get_xslt_from_repository (p_object_type => p_object_type);
+        v_xml := xmltype.createxml (p_xml);
+        v_result := v_xml.transform (v_xslt);
         pa_xmltype.ustaw_format (r_current_format);
         RETURN v_result;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE save_result (
-        p_inlo_id                       IN      jg_input_log.id%TYPE,
-        p_status                        IN      jg_input_log.status%TYPE,
-        p_object_id                     IN      jg_input_log.object_id%TYPE,
-        p_error                         IN      jg_input_log.error%TYPE DEFAULT NULL) IS
-------------------------------------------------------------------------------------------------------------------------
+        p_inlo_id     IN jg_input_log.id%TYPE,
+        p_status      IN jg_input_log.status%TYPE,
+        p_object_id   IN jg_input_log.object_id%TYPE,
+        p_error       IN jg_input_log.error%TYPE DEFAULT NULL)
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         UPDATE jg_input_log
            SET status = p_status,
@@ -1196,106 +1236,135 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
          WHERE id = p_inlo_id;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_customer (
-        p_xml                           IN      CLOB,
-        p_object_type                   IN      jg_xslt_repository.object_type%TYPE)
-        RETURN jg_input_log.object_id%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xml                           XMLTYPE;
-        v_core_ns              CONSTANT VARCHAR2 (200) := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"';
+        p_xml           IN CLOB,
+        p_object_type   IN jg_xslt_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xml                XMLTYPE;
+        v_core_ns   CONSTANT VARCHAR2 (200)
+            := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"' ;
     BEGIN
-        v_xml  := transform_xml (p_xml => p_xml, p_object_type => p_object_type);
-        apix_lg_konr.update_obj (p_konr                             => v_xml.getclobval,
-                                 p_update_limit                     => FALSE,
-                                 p_update_addresses_by_konr_mdf     => TRUE);
-        RETURN lg_konr_sql.id (p_symbol => pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns));
+        v_xml := transform_xml (p_xml => p_xml, p_object_type => p_object_type);
+        apix_lg_konr.update_obj (p_konr                           => v_xml.getclobval,
+                                 p_update_limit                   => FALSE,
+                                 p_update_addresses_by_konr_mdf   => TRUE);
+        RETURN lg_konr_sql.id (
+                   p_symbol   => pa_xmltype.wartosc (
+                                    v_xml,
+                                    '/PA_KONTRAHENT_TK/SYMBOL',
+                                    v_core_ns));
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_sale_order (
-        p_operation_id                  IN      jg_output_log.id%TYPE,
-        p_object_type                   IN      jg_xslt_repository.object_type%TYPE)
-        RETURN jg_input_log.object_id%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xml                           XMLTYPE;
-        v_xml_clob                      CLOB;
-        v_sql_query                     CLOB;
-        v_symbol                        lg_sal_orders.symbol%TYPE;
-        v_cinn_id                       lg_sal_orders.cinn_id%TYPE;
-        v_data_realizacji               lg_sal_orders.realization_date%TYPE;
-        v_numer                         NUMBER;
+        p_operation_id   IN jg_output_log.id%TYPE,
+        p_object_type    IN jg_xslt_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xml               XMLTYPE;
+        v_xml_clob          CLOB;
+        v_sql_query         CLOB;
+        v_symbol            lg_sal_orders.symbol%TYPE;
+        v_cinn_id           lg_sal_orders.cinn_id%TYPE;
+        v_data_realizacji   lg_sal_orders.realization_date%TYPE;
+        v_numer             NUMBER;
     BEGIN
-        v_sql_query        := get_query_from_sql_repository (p_object_type);
-        v_sql_query        := REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
-        v_sql_query        := REPLACE (v_sql_query, ':p_wzrc_id', sf_order_wzrc_id);
-        v_xml_clob         := create_xml (v_sql_query, p_object_type);
-        v_xml              := transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
-        v_data_realizacji  := pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/DATA_REALIZACJI');
-        lg_dosp_numerowanie.ustal_kolejny_numer (po_symbol            => v_symbol,
-                                                 po_cinn_id           => v_cinn_id,
-                                                 po_numer             => v_numer,
-                                                 p_data_faktury       => v_data_realizacji,
-                                                 p_data_sprzedazy     => v_data_realizacji,
-                                                 p_wzrc_id            => sf_order_wzrc_id);
-        v_xml              :=
-            XMLTYPE.APPENDCHILDXML (v_xml,
-                                    'LG_ZASP_T',
-                                    XMLTYPE ('<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));
+        v_sql_query := get_query_from_sql_repository (p_object_type);
+        v_sql_query :=
+            REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
+        v_sql_query := REPLACE (v_sql_query, ':p_wzrc_id', sf_order_wzrc_id);
+        v_xml_clob := create_xml (v_sql_query, p_object_type);
+        v_xml :=
+            transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
+        v_data_realizacji :=
+            pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/DATA_REALIZACJI');
+        lg_dosp_numerowanie.ustal_kolejny_numer (
+            po_symbol          => v_symbol,
+            po_cinn_id         => v_cinn_id,
+            po_numer           => v_numer,
+            p_data_faktury     => v_data_realizacji,
+            p_data_sprzedazy   => v_data_realizacji,
+            p_wzrc_id          => sf_order_wzrc_id);
+        v_xml :=
+            xmltype.APPENDCHILDXML (
+                v_xml,
+                'LG_ZASP_T',
+                xmltype (
+                    '<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));
         apix_lg_zasp.aktualizuj (p_zamowienie => v_xml.getclobval);
         lg_dosp_obe.zakoncz;
-        RETURN lg_sord_sql.id_symbol (p_symbol => pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/SYMBOL_DOKUMENTU'));
+        RETURN lg_sord_sql.id_symbol (
+                   p_symbol   => pa_xmltype.wartosc (
+                                    v_xml,
+                                    '/LG_ZASP_T/SYMBOL_DOKUMENTU'));
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE process (
-        pr_operation                    IN      jg_input_log%ROWTYPE) IS
-------------------------------------------------------------------------------------------------------------------------
-        v_object_id                     jg_input_log.object_id%TYPE;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE process (pr_operation IN jg_input_log%ROWTYPE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_object_id   jg_input_log.object_id%TYPE;
     BEGIN
-        pa_wass_def.ustaw (p_nazwa => 'IMPORT_INFINITE', p_wartosc => 'T');
-
         CASE pr_operation.object_type
             WHEN 'CUSTOMER_DATA'
             THEN
-                v_object_id  := import_customer (p_xml => pr_operation.xml, p_object_type => pr_operation.object_type);
+                v_object_id :=
+                    import_customer (
+                        p_xml           => pr_operation.xml,
+                        p_object_type   => pr_operation.object_type);
             WHEN 'NEW_CUSTOMER'
             THEN
-                v_object_id  := import_customer (p_xml => pr_operation.xml, p_object_type => pr_operation.object_type);
+                v_object_id :=
+                    import_customer (
+                        p_xml           => pr_operation.xml,
+                        p_object_type   => pr_operation.object_type);
             WHEN 'ORDER'
             THEN
-                v_object_id  :=
-                       import_sale_order (p_operation_id     => pr_operation.id,
-                                          p_object_type      => pr_operation.object_type);
+                pa_wass_def.ustaw (p_nazwa     => 'IMPORT_INFINITE',
+                                   p_wartosc   => 'T');
+                v_object_id :=
+                    import_sale_order (
+                        p_operation_id   => pr_operation.id,
+                        p_object_type    => pr_operation.object_type);
         END CASE;
 
-        save_result (p_inlo_id => pr_operation.id, p_status => 'PROCESSED', p_object_id => v_object_id);
+        save_result (p_inlo_id     => pr_operation.id,
+                     p_status      => 'PROCESSED',
+                     p_object_id   => v_object_id);
         pa_wass_def.usun (p_nazwa => 'IMPORT_INFINITE');
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE get_from_ftp IS
-------------------------------------------------------------------------------------------------------------------------
-        v_connection                    UTL_TCP.connection;
-        v_file_list                     jg_ftp.t_string_table;
-        v_file                          CLOB;
-        v_object_type                   jg_input_log.object_type%TYPE;
-        v_on_time                       jg_input_log.on_time%TYPE;
-        v_error                         jg_input_log.error%TYPE;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE get_from_ftp
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_connection    UTL_TCP.connection;
+        v_file_list     jg_ftp.t_string_table;
+        v_file          CLOB;
+        v_object_type   jg_input_log.object_type%TYPE;
+        v_on_time       jg_input_log.on_time%TYPE;
+        v_error         jg_input_log.error%TYPE;
     BEGIN
         BEGIN
-            v_connection  :=
-                jg_ftp.login (p_host     => jg_ftp_configuration.sf_ftp_host,
-                              p_port     => jg_ftp_configuration.sf_ftp_port,
-                              p_user     => jg_ftp_configuration.sf_ftp_user,
-                              p_pass     => jg_ftp_configuration.sf_ftp_password);
+            v_connection :=
+                jg_ftp.login (
+                    p_host   => jg_ftp_configuration.sf_ftp_host,
+                    p_port   => jg_ftp_configuration.sf_ftp_port,
+                    p_user   => jg_ftp_configuration.sf_ftp_user,
+                    p_pass   => jg_ftp_configuration.sf_ftp_password);
 
             FOR r_sqre IN (SELECT *
                              FROM jg_sql_repository sqre
                             WHERE sqre.direction = 'IN')
             LOOP
-                v_file_list  := NULL;
-                jg_ftp.nlst (p_conn => v_connection, p_dir => r_sqre.file_location, p_list => v_file_list);
+                v_file_list := NULL;
+                jg_ftp.nlst (p_conn   => v_connection,
+                             p_dir    => r_sqre.file_location,
+                             p_list   => v_file_list);
 
                 IF v_file_list.FIRST IS NOT NULL
                 THEN
@@ -1303,52 +1372,57 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                     LOOP
                         BEGIN
                             SAVEPOINT process_file;
-                            v_object_type  := r_sqre.object_type;
+                            v_object_type := r_sqre.object_type;
 
                             IF INSTR (v_file_list (v_i), '.xml') > 0
                             THEN
-                                v_file  :=
-                                    jg_ftp.get_remote_ascii_data (p_conn     => v_connection,
-                                                                  p_file     => r_sqre.file_location || '/'
-                                                                                || v_file_list (v_i));
-                                determine_object_type (p_xml              => v_file,
-                                                       po_object_type     => v_object_type,
-                                                       po_on_time         => v_on_time);
+                                v_file :=
+                                    jg_ftp.get_remote_ascii_data (
+                                        p_conn   => v_connection,
+                                        p_file   =>    r_sqre.file_location
+                                                    || '/'
+                                                    || v_file_list (v_i));
+                                determine_object_type (
+                                    p_xml            => v_file,
+                                    po_object_type   => v_object_type,
+                                    po_on_time       => v_on_time);
 
-                                INSERT INTO jg_input_log
-                                            (id,
-                                             file_name,
-                                             object_type,
-                                             xml,
-                                             on_time)
+                                INSERT INTO jg_input_log (id,
+                                                          file_name,
+                                                          object_type,
+                                                          xml,
+                                                          on_time)
                                      VALUES (jg_inlo_seq.NEXTVAL,
                                              v_file_list (v_i),
                                              v_object_type,
                                              v_file,
                                              v_on_time);
-                            /*  jg_ftp.rename (
-                                  p_conn   => v_connection,
-                                  p_from   =>    r_sqre.file_location
-                                              || '/'
-                                              || v_file_list (v_i),
-                                  p_to     =>    r_sqre.file_location
-                                              || '/archive/'
-                                              || v_file_list (v_i)); */
+
+                                jg_ftp.rename (
+                                    p_conn   => v_connection,
+                                    p_from   =>    r_sqre.file_location
+                                                || '/'
+                                                || v_file_list (v_i),
+                                    p_to     =>    r_sqre.file_location
+                                                || '/archive/'
+                                                || v_file_list (v_i));
                             END IF;
                         EXCEPTION
                             WHEN OTHERS
                             THEN
                                 ROLLBACK TO process_file;
-                                v_error  := SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace;
+                                v_error :=
+                                       SQLERRM
+                                    || CHR (13)
+                                    || DBMS_UTILITY.format_error_backtrace;
 
-                                INSERT INTO jg_input_log
-                                            (id,
-                                             file_name,
-                                             object_type,
-                                             xml,
-                                             on_time,
-                                             status,
-                                             error)
+                                INSERT INTO jg_input_log (id,
+                                                          file_name,
+                                                          object_type,
+                                                          xml,
+                                                          on_time,
+                                                          status,
+                                                          error)
                                      VALUES (jg_inlo_seq.NEXTVAL,
                                              v_file_list (v_i),
                                              v_object_type,
@@ -1366,15 +1440,16 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             WHEN OTHERS
             THEN
                 jg_ftp.LOGOUT (v_connection);
-                assert (FALSE, SQLERRM || '  ' || DBMS_UTILITY.format_error_backtrace);
+                assert (
+                    FALSE,
+                    SQLERRM || '  ' || DBMS_UTILITY.format_error_backtrace);
         END;
 
         COMMIT;
 
         FOR r_operation IN (SELECT *
                               FROM jg_input_log
-                             WHERE     status = 'READY'
-                                   AND on_time = 'T')
+                             WHERE status = 'READY' AND on_time = 'T')
         LOOP
             SAVEPOINT operation;
 
@@ -1384,19 +1459,23 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 WHEN OTHERS
                 THEN
                     ROLLBACK TO operation;
-                    save_result (p_inlo_id       => r_operation.id,
-                                 p_status        => 'ERROR',
-                                 p_object_id     => NULL,
-                                 p_error         => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                    save_result (
+                        p_inlo_id     => r_operation.id,
+                        p_status      => 'ERROR',
+                        p_object_id   => NULL,
+                        p_error       =>    SQLERRM
+                                         || CHR (13)
+                                         || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
 
         send_response;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE process_all IS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE process_all
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         FOR r_operation IN (SELECT *
                               FROM jg_input_log
@@ -1410,10 +1489,13 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 WHEN OTHERS
                 THEN
                     ROLLBACK TO operation;
-                    save_result (p_inlo_id       => r_operation.id,
-                                 p_status        => 'ERROR',
-                                 p_object_id     => NULL,
-                                 p_error         => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                    save_result (
+                        p_inlo_id     => r_operation.id,
+                        p_status      => 'ERROR',
+                        p_object_id   => NULL,
+                        p_error       =>    SQLERRM
+                                         || CHR (13)
+                                         || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
 
@@ -1429,7 +1511,7 @@ CREATE OR REPLACE PACKAGE jg_obop_def IS
         p_object_id                     IN      JG_observed_operations.object_id%TYPE,
         p_object_type                   IN      JG_observed_operations.object_type%TYPE,
         p_operation_type                IN      JG_observed_operations.operation_type%TYPE,
-        p_attachemnt                    IN      jg_observed_operations.attachment%TYPE DEFAULT 'N');
+        p_attachment                    IN      jg_observed_operations.attachment%TYPE DEFAULT 'N');
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
@@ -1499,7 +1581,7 @@ CREATE OR REPLACE PACKAGE BODY jg_obop_def IS
         p_object_id                     IN      jg_observed_operations.object_id%TYPE,
         p_object_type                   IN      jg_observed_operations.object_type%TYPE,
         p_operation_type                IN      jg_observed_operations.operation_type%TYPE,
-        p_attachemnt                    IN      jg_observed_operations.attachment%TYPE DEFAULT 'N') IS
+        p_attachment                    IN      jg_observed_operations.attachment%TYPE DEFAULT 'N') IS
 ------------------------------------------------------------------------------------------------------------------------
         r_obop                          jg_observed_operations%ROWTYPE;
     BEGIN
