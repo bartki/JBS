@@ -4,7 +4,7 @@ BEGIN
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'INVOICES_PAYMENTS',
-                 '    SELECT rndo.symbol_dokumentu invoice_number,
+                 'SELECT rndo.symbol_dokumentu invoice_number,
          rndo.data_dokumentu invoice_date,
          rndo.termin_platnosci due_date,
          rndo.forma_platnosci payment_form,
@@ -36,7 +36,8 @@ GROUP BY rndo.symbol_dokumentu,
          konr.nazwa,
          rndo.wartosc_dok_z_kor_wwb,
          rndo.poz_do_zaplaty_dok_z_kor_wwb,
-         rndo.rndo_id, rndo.data_dokumentu',
+         rndo.rndo_id,
+          rndo.data_dokumentu',
                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
@@ -75,6 +76,10 @@ GROUP BY rndo.symbol_dokumentu,
                          (SELECT stva.stopa
                             FROM rk_stawki_vat stva
                            WHERE stva.id = inma.stva_id) vat_rate,
+                         (SELECT zapas_min
+                            FROM ap_inma_maga_zapasy inmz
+                           WHERE inmz.inma_id = inma.id
+                                 AND inmz.maga_id = 500) MIN_STOCK,
                           CURSOR (SELECT jdmr_nazwa unit_of_measure_code, kod_kreskowy ean_code
                                     FROM lg_przeliczniki_jednostek prje
                                    WHERE prje.inma_id = inma.id) units_of_measure,
@@ -153,6 +158,7 @@ GROUP BY rndo.symbol_dokumentu,
                          NVL(konr.aktualny, ''N'') active,
                          konr.platnik is_payer,
                          konr.odbiorca is_reciever,
+                         konr.potential potential,
                          konr.nr_tel phone,
                          konr.nr_faksu fax,
                          konr.mail email,
@@ -412,25 +418,47 @@ GROUP BY rndo.symbol_dokumentu,
          VALUES (jg_sqre_seq.NEXTVAL,
                  'SETS_COMPONENTS',
                  'SELECT inma_kpl.indeks set_id,
-                         inma_kpl.nazwa set_name,
-                         jg_output_sync.format_number(lg_stm_sgpu_sql.stan_goracy(inma_kpl.id, inma_kpl.jdmr_nazwa, NULL), 100) available_stock,
-                         jg_output_sync.format_number(inma_kpl.atrybut_n05, 4) price_before_discount,
-                         jg_output_sync.format_number(inma_kpl.atrybut_n06, 4) price_after_discount,
-                         inma_kpl.atrybut_d01 valid_date,
-                         CURSOR (SELECT inma_skpl.indeks commodity_id,
-                                        inma_skpl.nazwa commodity_name,
-                                        jg_output_sync.format_number(kpsk1.ilosc, 100) quantity,
-                                        kpsk1.premiowy bonus,
-                                        DECODE(kpsk1.dynamiczny, ''T'', ''DYNAMIC'', ''STATIC'') set_type,
-                                        DECODE(inma_skpl.atrybut_t03, ''T'', ''N'', ''Y'') contract_payment
-                                   FROM lg_kpl_skladniki_kompletu kpsk1,
-                                        ap_indeksy_materialowe    inma_skpl
-                                  WHERE     kpsk1.skl_inma_id = inma_skpl.id
-                                        AND kpsk1.kpl_inma_id = kpsk.kpl_inma_id) components
-                                   FROM lg_kpl_skladniki_kompletu kpsk, ap_indeksy_materialowe inma_kpl
-                   WHERE     kpsk.kpl_inma_id = inma_kpl.id
-                         AND ROWNUM = 1
-                         AND kpsk.kpl_inma_id IN (:p_id)',
+       inma_kpl.nazwa set_name,
+       jg_output_sync.format_number (
+           lg_stm_sgpu_sql.stan_goracy (inma_kpl.id,
+                                        inma_kpl.jdmr_nazwa,
+                                        NULL),
+           100)
+           available_stock,
+       jg_output_sync.format_number (inma_kpl.atrybut_n05, 4)
+           price_before_discount,
+       jg_output_sync.format_number (inma_kpl.atrybut_n06, 4)
+           price_after_discount,
+       inma_kpl.atrybut_d01 valid_date,
+       inma_kpl.aktualny up_to_date,
+       CURSOR (
+           SELECT inma_skpl.indeks commodity_id,
+                  inma_skpl.nazwa commodity_name,
+                  jg_output_sync.format_number (kpsk1.ilosc, 100) quantity,
+                  kpsk1.premiowy bonus,
+                  DECODE (kpsk1.dynamiczny, ''T'', ''DYNAMIC'', ''STATIC'')
+                      set_type,
+                  DECODE (inma_skpl.atrybut_t03, ''T'', ''N'', ''Y'')
+                      contract_payment,
+                  inma_skpl.aktualny up_to_date,
+                  CURSOR (
+                      SELECT indeks commodity_id,
+                             nazwa commodity_name,
+                             inma.aktualny up_to_date
+                        FROM ap_indeksy_materialowe inma
+                       WHERE inma.id IN (SELECT /*+ DYNAMIC_SAMPLING(a, 5) */
+                                                COLUMN_VALUE
+                                           FROM TABLE (
+                                                    jg_dynamic_set_commponents (
+                                                        kpsk1.id)) a))
+                      dynamic_components
+             FROM lg_kpl_skladniki_kompletu kpsk1,
+                  ap_indeksy_materialowe inma_skpl
+            WHERE     kpsk1.skl_inma_id = inma_skpl.id
+                  AND kpsk1.kpl_inma_id = inma_kpl.id)
+           components
+  FROM ap_indeksy_materialowe inma_kpl
+ WHERE inma_kpl.id IN ( :p_id)',
                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
@@ -446,6 +474,9 @@ GROUP BY rndo.symbol_dokumentu,
                      <xsl:template priority="2" match="COMPONENTS/COMPONENTS_ROW">
                         <COMPONENT><xsl:apply-templates/></COMPONENT>
                      </xsl:template>
+                     <xsl:template priority="2" match="DYNAMIC_COMPONENTS/DYNAMIC_COMPONENTS_ROW">
+                        <DYNAMIC_COMPONENT><xsl:apply-templates/></DYNAMIC_COMPONENT>
+                     </xsl:template>                     
                   </xsl:stylesheet>',
                  'IN/components',
                  'T',
@@ -473,8 +504,7 @@ INSERT INTO jg_sql_repository (id,
        || '',T''
            AS id_erp,
        1 AS active,
-       TRANSLATE (osby.imie || ''.'' || osby.nazwisko || ''.JBS'',
-                  ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
+       TRANSLATE (osby.imie || ''.'' || osby.nazwisko || ''.JBS'', ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
                   ''AaCcEeLlNnOoSsZzZz'')
            AS userlogin,
        osby.imie username,
@@ -683,7 +713,7 @@ INSERT INTO jg_sql_repository (id,
                      <xsl:template priority="2" match="ROW">
                         <DISCOUNT><xsl:apply-templates/></DISCOUNT>
                      </xsl:template>
-                  </xsl:stylesheet>',
+                  </xsl:styleshee>',
                   'IN/discounts',
                   'T',
                   'OUT');
@@ -729,47 +759,74 @@ INSERT INTO jg_sql_repository (id,
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'CONTRACTS',
-                 'SELECT umsp.symbol       ID,
-                         umsp.konr_id_pl   CONTRACTOR_ID,
-                         umsp.data_od      DATE_FROM,
-                         umsp.data_do      DATE_TO,
-                         wzrc.nazwa        CONTRACT_DESTINATION,                                
-                         jg_output_sync.format_number (umsp1.contract_value, 10),
-                         jg_output_sync.format_number ((SELECT SUM(Lg_Ums_Uiwl_Def.Wartosc_Zrl_Z_Dosi(p_uiwl_id => umsi.id))
-                                                          FROM lg_ums_umowy_sprz_it umsi
-                                                         WHERE umsi.umsp_id = umsp.id), 10) CONTRACT_VALUE_REALIZED,
-                         CASE WHEN umsp1.splata - (umsp1.contract_value / umsp1.duration) * (FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from))) < 0 THEN ''T'' ELSE ''N'' END DELAYED,
-                         CASE WHEN (umsp1.contract_value / umsp1.duration) * FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from)) - umsp1.splata > (umsp1.contract_value / umsp1.duration) * 3 THEN ''N'' ELSE ''T'' END CAN_SKIP_REPAYMENT,
-                         CURSOR ( SELECT inma.indeks COMMODITY_ID,
-                                         CURSOR ( SELECT pobu.data_od DATE_FROM,
-                                                         pobu.data_do DATE_TO,
-                                                         pobu.wartosc VALUE,
-                                                         NVL(Lg_Ums_Pobu_Def.Wartosc_Zrl_Z_Dosi(pobu.id), 0) VALUE_REALIZED
-                                                    FROM lg_ums_pozycje_budzetu_umsi pobu
-                                                   WHERE pobu.umsi_id = umsi.id) PERIODS
-                                    FROM lg_ums_umowy_sprz_it umsi,
-                                         ap_indeksy_materialowe inma
-                                   WHERE     inma.id = umsi.inma_id
-                                         AND umsi.umsp_id = umsp.id) LINES
-                    FROM lg_ums_umowy_sprz umsp,
-                         lg_wzorce wzrc,                                
-                         (SELECT ID,
-                                 (SELECT SUM(pobu.wartosc) 
-                                    FROM lg_ums_pozycje_budzetu_umsi pobu,
-                                         lg_ums_umowy_sprz_it umsi
-                                   WHERE     pobu.umsi_id = umsi.id                                                
-                                         AND umsi.umsp_id = umsp.id) CONTRACT_VALUE,
-                                 (SELECT NVL(SUM (umru.wartosc), 0)
-                                    FROM lg_ums_realizacje_umsi umru,
-                                         lg_ums_umowy_sprz_it umsi
-                                   WHERE     umsi.id = umru.uiwl_id
-                                         AND umsi.umsp_id = umsp.id) SPLATA,
-                                 NVL(ADD_MONTHS (umsp.data_do, -umsp.atrybut_n01) + 1, umsp.data_od) AS DATE_FROM,
-                                 atrybut_n01 DURATION
-                            FROM lg_ums_umowy_sprz umsp) umsp1
-                          WHERE     wzrc.id = umsp.wzrc_id
-                                AND umsp.id = umsp1.id
-                                AND umsp.id IN (:p_id)',
+                 'SELECT umsp.symbol id,
+       umsp.konr_id_pl contractor_id,
+       umsp.data_od date_from,
+       umsp.data_do date_to,
+       wzrc.nazwa contract_destination,
+       jg_output_sync.format_number (umsp1.contract_value, 10) contract_valu,
+       jg_output_sync.format_number (
+           (SELECT SUM (
+                       lg_ums_uiwl_def.wartosc_zrl_z_dosi (
+                           p_uiwl_id   => umsi.id))
+              FROM lg_ums_umowy_sprz_it umsi
+             WHERE umsi.umsp_id = umsp.id),
+           10)
+           contract_value_realized,
+       CASE
+           WHEN   umsp1.splata
+                -   (umsp1.contract_value / umsp1.duration)
+                  * (FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from))) < 0
+           THEN
+              ''T''
+           ELSE
+               ''N''
+       END
+           delayed,
+       CASE
+           WHEN     (umsp1.contract_value / umsp1.duration)
+                  * FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from))
+                - umsp1.splata > (umsp1.contract_value / umsp1.duration) * 3
+           THEN
+               ''N''
+           ELSE
+               ''T''
+       END
+           can_skip_repayment,
+       CURSOR (
+           SELECT inma.indeks commodity_id,
+                  CURSOR (
+                      SELECT pobu.data_od date_from,
+                             pobu.data_do date_to,
+                             pobu.wartosc VALUE,
+                             NVL (
+                                 lg_ums_pobu_def.wartosc_zrl_z_dosi (pobu.id),
+                                 0)
+                                 value_realized
+                        FROM lg_ums_pozycje_budzetu_umsi pobu
+                       WHERE pobu.umsi_id = umsi.id)
+                      periods
+             FROM lg_ums_umowy_sprz_it umsi, ap_indeksy_materialowe inma
+            WHERE inma.id = umsi.inma_id AND umsi.umsp_id = umsp.id)
+           lines
+  FROM lg_ums_umowy_sprz umsp,
+       lg_wzorce wzrc,
+       (SELECT id,
+               (SELECT SUM (pobu.wartosc)
+                  FROM lg_ums_pozycje_budzetu_umsi pobu,
+                       lg_ums_umowy_sprz_it umsi
+                 WHERE pobu.umsi_id = umsi.id AND umsi.umsp_id = umsp.id)
+                   contract_value,
+               (SELECT NVL (SUM (umru.wartosc), 0)
+                  FROM lg_ums_realizacje_umsi umru, lg_ums_umowy_sprz_it umsi
+                 WHERE umsi.id = umru.uiwl_id AND umsi.umsp_id = umsp.id)
+                   splata,
+               NVL (ADD_MONTHS (umsp.data_do, -umsp.atrybut_n01) + 1,
+                    umsp.data_od)
+                   AS date_from,
+               atrybut_n01 duration
+          FROM lg_ums_umowy_sprz umsp) umsp1
+ WHERE wzrc.id = umsp.wzrc_id AND umsp.id = umsp1.id AND umsp.id IN ( :p_id)',
                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
@@ -793,224 +850,258 @@ INSERT INTO jg_sql_repository (id,
                  'OUT');
                  
                  INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
- +         VALUES (jg_sqre_seq.NEXTVAL,
- +                 'SUPPORT_FUNDS',
- +                 'SELECT fwk.konr_symbol                                     AS client_symbol,
- +                         SUM(fwk.fwk_m_pozostalo)                            AS marketing_support_fund,
- +                         SUM(fwk.fwk_t_pozostalo)                            AS other_support_fund,
- +                         SUM(fwk.fwk_m_pozostalo) + SUM(fwk.fwk_t_pozostalo) AS sum_support_fund
- +                    FROM jbs_mp_przeglad_fwk fwk,
- +                         jbs_mp_przeglad_fwk fwk_changed
- +                   WHERE     fwk.konr_symbol = fwk_changed.konr_symbol
- +                         AND fwk.data_faktury >= add_months(trunc(sysdate,''MM''),-12) 
- +                         --AND fwk.czy_zaplacona = ''T''
- +                         AND fwk_changed.id IN (:p_id)
- +                GROUP BY fwk.konr_symbol',
- +                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
- +                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
- +                     <xsl:strip-space elements="*"/>
- +                     <xsl:template match="node()|@*">
- +                        <xsl:copy>
- +                           <xsl:apply-templates select="node()|@*"/>
- +                        </xsl:copy>
- +                     </xsl:template>
- +                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
- +                     <xsl:template priority="2" match="ROW">
- +                        <SUPPORT_FUND><xsl:apply-templates/></SUPPORT_FUND>
- +                     </xsl:template>
- +                  </xsl:stylesheet>',
- +                 'IN/support_funds',
- +                 'T',
- +                 'OUT');
- +
- +    INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
- +         VALUES (jg_sqre_seq.NEXTVAL,
- +                 'LOYALITY_POINTS',
- +                 'SELECT puko.CLIENT_SYMBOL,
- +                         puko.POINTS_TYPE,
- +                         puko.POINTS_VALUE,
- +                         puko.SUM_REAL_POINTS_VALUE,
- +                         puko.SUM_TEMPORARY_POINTS_VALUE,
- +                         puko.SUM_POINTS_VALUE,
- +                         puko.CALCULATION_DATE,
- +                         ADD_MONTHS(puko.CALCULATION_DATE, 24) EXPIRE_DATE,
- +                         CURSOR (SELECT DECODE(puko1.rzeczywiste, ''T'', ''RZECZYWISTE'', ''TYMCZASOWE'') AS POINTS_TYPE,
- +                                        puko1.wartosc_punktow             AS POINTS_VALUE,
- +                                        dosp.data_faktury                 AS CALCULATION_DATE,
- +                                        ADD_MONTHS(dosp.data_faktury, 24) AS EXPIRE_DATE
- +                                   FROM lg_plo_punkty_kontrahenta puko1,
- +                                        lg_dokumenty_sprz_vw dosp
- +                                  WHERE     dosp.id = puko1.dosp_id
- +                                        AND puko1.konr_id = puko.konr_id
- +                               ORDER BY puko1.id DESC)                    AS HISTORY
- +                    FROM (SELECT konr.symbol  AS CLIENT_SYMBOL,
- +                                 DECODE(puko.rzeczywiste, ''T'', ''RZECZYWISTE'', ''TYMCZASOWE'') AS POINTS_TYPE,
- +                                 puko.wartosc_punktow AS POINTS_VALUE,
- +                                 (SELECT SUM(puko1.wartosc_punktow)
- +                                    FROM lg_plo_punkty_kontrahenta puko1
- +                                   WHERE     puko1.konr_id = puko.konr_id
- +                                         AND puko1.rzeczywiste = ''T'') AS SUM_REAL_POINTS_VALUE,
- +                                 (SELECT SUM(puko1.wartosc_punktow)
- +                                    FROM lg_plo_punkty_kontrahenta puko1
- +                                   WHERE     puko1.konr_id = puko.konr_id
- +                                         AND puko1.rzeczywiste = ''N'') AS SUM_TEMPORARY_POINTS_VALUE, 
- +                                 (SELECT SUM(puko1.wartosc_punktow)
- +                                    FROM lg_plo_punkty_kontrahenta puko1
- +                                   WHERE puko1.konr_id = puko.konr_id) AS SUM_POINTS_VALUE,                
- +                                 NVL((SELECT CASE WHEN (SELECT MAX(id) FROM lg_plo_punkty_kontrahenta WHERE konr_id = puko.konr_id) = dosp.puko_id THEN dosp.data_faktury ELSE dosp.data_faktury + 1 END
- +                                        FROM (SELECT puko1.id puko_id,
- +                                                     puko1.konr_id konr_id,
- +                                                     dosp.data_faktury data_faktury                                     
- +                                                FROM lg_plo_punkty_kontrahenta puko1,
- +                                                     lg_dokumenty_sprz_vw dosp
- +                                               WHERE     dosp.id = puko1.dosp_id
- +                                                     AND puko1.dosp_id IS NOT NULL
- +                                            ORDER BY puko1.id desc) dosp
- +                                       WHERE     dosp.konr_id = puko.konr_id
- +                                             AND dosp.data_faktury IS NOT NULL
- +                                             AND ROWNUM = 1), TO_DATE(''01-01-2000'', ''DD-MM-YYYY'')) CALCULATION_DATE,
- +                                 puko.konr_id
- +                           FROM lg_plo_punkty_kontrahenta puko,
- +                                ap_kontrahenci konr
- +                          WHERE     konr.id = puko.konr_id
- +                                AND puko.id IN (:p_id)) puko',
- +                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
- +                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
- +                     <xsl:strip-space elements="*"/>
- +                     <xsl:template match="node()|@*">
- +                        <xsl:copy>
- +                           <xsl:apply-templates select="node()|@*"/>
- +                        </xsl:copy>
- +                     </xsl:template>
- +                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
- +                     <xsl:template priority="2" match="ROW">
- +                        <LOYALITY_POINT><xsl:apply-templates/></LOYALITY_POINT>
- +                     </xsl:template>
- +                     <xsl:template priority="2" match="HISTORY/HISTORY_ROW">
- +                        <POINTS><xsl:apply-templates/></POINTS>            
- +                     </xsl:template>
- +                  </xsl:stylesheet>',
- +                 'IN/loyality_points',
- +                 'T',
- +                 'OUT');
- +                 
- +    INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
- +         VALUES (jg_sqre_seq.NEXTVAL,
- +                 'TRADE_CONTRACTS_INDIVIDUAL',
- +                 'SELECT konr.nr_umowy_ind                     AS CONTRACT_NUMBER,
- +                         DECODE (individual_contract, ''T'', konr.data_umowy_ind, konr.atrybut_d01) AS CONTRACT_DATE,
- +                         individual_contract                   AS INDIVIDUAL_CONTRACT,
- +                         konr.foza_kod                         AS DEFAULT_PAYMENT_TYPE,
- +                         NVL(konr.limit_kredytowy, 0)          AS CREDIT_LIMIT,
- +                         konr.dni_do_zaplaty                   AS PAYMENT_DATE,
- +                         prup.upust_procentowy                 AS DISCOUNT_PERCENT,
- +                         a_mp_dekoduj_pkt(konr.atrybut_t07, 0) AS QUARTER_POINTS,
- +                         a_mp_dekoduj_pkt(konr.atrybut_t07, 1) AS HALF_YEAR_POINTS,
- +                         a_mp_dekoduj_pkt(konr.atrybut_t07, 2) AS YEAR_POINTS,
- +                         a_mp_dekoduj_pkt(konr.atrybut_t07, 3) AS QUARTER_DISCOUNT,
- +                         a_mp_dekoduj_pkt(konr.atrybut_t07, 4) AS HALF_YEAR_DISCOUNT,
- +                         a_mp_dekoduj_pkt(konr.atrybut_t07, 5) AS YEAR_DISCOUNT,
- +                         konr.atrybut_n05                      AS QUARTER_THRESHOLD,
- +                         konr.atrybut_n02                      AS HALF_YEAR_THRESHOLD,
- +                         konr.atrybut_n03                      AS YEAR_THRESHOLD
- +                    FROM (SELECT CASE WHEN konr.atrybut_t05 like ''%UM IND%'' THEN ''T'' ELSE ''N'' END INDIVIDUAL_CONTRACT,
- +                                 konr.*
- +                            FROM ap_kontrahenci konr) konr,
- +                                 lg_przyp_upustow prup
- +                           WHERE     prup.grod_id(+) = konr.grod_id
- +                                 AND konr.id IN (:p_id)',
- +                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
- +                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
- +                     <xsl:strip-space elements="*"/>
- +                     <xsl:template match="node()|@*">
- +                        <xsl:copy>
- +                           <xsl:apply-templates select="node()|@*"/>
- +                        </xsl:copy>
- +                     </xsl:template>
- +                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
- +                     <xsl:template priority="2" match="ROW">
- +                        <TRADE_CONTRACTS><xsl:apply-templates/></TRADE_CONTRACTS>
- +                     </xsl:template>
- +                  </xsl:stylesheet>',
- +                 'IN/trade_contracts',
- +                 'T',
- +                 'OUT');
- +                 
- +    INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
- +         VALUES (jg_sqre_seq.NEXTVAL,
- +                 'TRADE_CONTRACTS',
- +                 'SELECT konr.nr_umowy_ind                     AS CONTRACT_NUMBER,
- +                         DECODE (individual_contract, ''T'', konr.data_umowy_ind, konr.atrybut_d01) AS CONTRACT_DATE,
- +                         individual_contract                   AS INDIVIDUAL_CONTRACT,
- +                         konr.foza_kod                         AS DEFAULT_PAYMENT_TYPE,
- +                         NVL(konr.limit_kredytowy, 0)          AS CREDIT_LIMIT,
- +                         konr.dni_do_zaplaty                   AS PAYMENT_DATE,
- +                         prup.upust_procentowy                 AS DISCOUNT_PERCENT,
- +                         konr.atrybut_n04                      AS BONUS_POINTS
- +                    FROM (SELECT CASE WHEN konr.atrybut_t05 like ''%UM IND%'' THEN ''T'' ELSE ''N'' END INDIVIDUAL_CONTRACT,
- +                                 konr.*
- +                            FROM ap_kontrahenci konr) konr,
- +                                 lg_przyp_upustow prup
- +                           WHERE     prup.grod_id(+) = konr.grod_id
- +                                 AND konr.id IN (:p_id)',
- +                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
- +                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
- +                     <xsl:strip-space elements="*"/>
- +                     <xsl:template match="node()|@*">
- +                        <xsl:copy>
- +                           <xsl:apply-templates select="node()|@*"/>
- +                        </xsl:copy>
- +                     </xsl:template>
- +                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
- +                     <xsl:template priority="2" match="ROW">
- +                        <TRADE_CONTRACTS><xsl:apply-templates/></TRADE_CONTRACTS>
- +                     </xsl:template>
- +                  </xsl:stylesheet>',
- +                 'IN/trade_contracts',
- +                 'T',
- +                 'OUT');
- +
- +    INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
- +         VALUES (jg_sqre_seq.NEXTVAL,
- +                 'DELIVERIES',
- +                 'SELECT doob.symbol           AS DOCUMENT_SYMBOL,
- +                         doob.konr_symbol      AS CONTRACTOR_SYMBOL,
- +                         doob.data_realizacji  AS REALIZATION_DATE,
- +                         doob.numer            AS DOCUMENT_NUMBER,
- +                         doob.numer_zamowienia AS ORDER_SYMBOL,
- +                         CURSOR (SELECT dobi.numer       AS ORDINAL,
- +                                        dobi.inma_symbol AS ITEM_SYMBOL,
- +                                        dobi.inma_nazwa  AS ITEM_NAME,
- +                                        dobi.ilosc       AS QUANTITY,
- +                                        dobi.cena        AS PRICE,
- +                                        dobi.wartosc     AS VALUE
- +                                   FROM ap_dokumenty_obrot_it dobi
- +                                  WHERE dobi.doob_id = doob.id
- +                               ORDER BY dobi.numer ) AS LINES
- +                    FROM ap_dokumenty_obrot doob
- +                   WHERE     doob.wzty_kod = ''WZ''
- +                         AND doob.numer_zamowienia IS NOT NULL
- +                         AND doob.id IN (:p_id)',
- +                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
- +                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
- +                     <xsl:strip-space elements="*"/>
- +                     <xsl:template match="node()|@*">
- +                        <xsl:copy>
- +                           <xsl:apply-templates select="node()|@*"/>
- +                        </xsl:copy>
- +                     </xsl:template>
- +                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
- +                     <xsl:template priority="2" match="ROW">
- +                        <DELIVERY><xsl:apply-templates/></DELIVERY>
- +                     </xsl:template>
- +                     <xsl:template priority="2" match="LINES/LINES_ROW">
- +                        <LINE><xsl:apply-templates/></LINE>
- +                     </xsl:template>
- +                  </xsl:stylesheet>',
- +                 'IN/deliveries',
- +                 'T',
- +                 'OUT');    
-  END;
-  /
+          VALUES (jg_sqre_seq.NEXTVAL,
+                  'SUPPORT_FUNDS',
+                  'SELECT fwk.konr_symbol                                    AS client_symbol,
+                         SUM(fwk.fwk_m_pozostalo)                            AS marketing_support_fund,
+                         SUM(fwk.fwk_t_pozostalo)                            AS other_support_fund,
+                         SUM(fwk.fwk_m_pozostalo) + SUM(fwk.fwk_t_pozostalo) AS sum_support_fund
+                    FROM jbs_mp_przeglad_fwk fwk,
+                         jbs_mp_przeglad_fwk fwk_changed
+                   WHERE     fwk.konr_symbol = fwk_changed.konr_symbol
+                         AND fwk.data_faktury >= add_months(trunc(sysdate,''MM''),-12) 
+                         --AND fwk.czy_zaplacona = ''T''
+                         AND fwk_changed.id IN (:p_id)
+                GROUP BY fwk.konr_symbol',
+                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                     <xsl:strip-space elements="*"/>
+                     <xsl:template match="node()|@*">
+                        <xsl:copy>
+                           <xsl:apply-templates select="node()|@*"/>
+                        </xsl:copy>
+                     </xsl:template>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
+                     <xsl:template priority="2" match="ROW">
+                        <SUPPORT_FUND><xsl:apply-templates/></SUPPORT_FUND>
+                     </xsl:template>
+                  </xsl:stylesheet>',
+                  'IN/support_funds',
+                  'T',
+                  'OUT');
+ 
+      INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
+          VALUES (jg_sqre_seq.NEXTVAL,
+                  'LOYALITY_POINTS',
+                  'SELECT puko.CLIENT_SYMBOL,
+                         puko.POINTS_TYPE,
+                         puko.POINTS_VALUE,
+                         puko.SUM_REAL_POINTS_VALUE,
+                         puko.SUM_TEMPORARY_POINTS_VALUE,
+                         puko.SUM_POINTS_VALUE,
+                         puko.CALCULATION_DATE,
+                         ADD_MONTHS(puko.CALCULATION_DATE, 24) EXPIRE_DATE,
+                         CURSOR (SELECT DECODE(puko1.rzeczywiste, ''T'', ''RZECZYWISTE'', ''TYMCZASOWE'') AS POINTS_TYPE,
+                                        puko1.wartosc_punktow             AS POINTS_VALUE,
+                                        dosp.data_faktury                 AS CALCULATION_DATE,
+                                        ADD_MONTHS(dosp.data_faktury, 24) AS EXPIRE_DATE
+                                   FROM lg_plo_punkty_kontrahenta puko1,
+                                        lg_dokumenty_sprz_vw dosp
+                                  WHERE     dosp.id = puko1.dosp_id
+                                        AND puko1.konr_id = puko.konr_id
+                               ORDER BY puko1.id DESC)                    AS HISTORY
+                    FROM (SELECT konr.symbol  AS CLIENT_SYMBOL,
+                                 DECODE(puko.rzeczywiste, ''T'', ''RZECZYWISTE'', ''TYMCZASOWE'') AS POINTS_TYPE,
+                                 puko.wartosc_punktow AS POINTS_VALUE,
+                                 (SELECT SUM(puko1.wartosc_punktow)
+                                    FROM lg_plo_punkty_kontrahenta puko1
+                                   WHERE     puko1.konr_id = puko.konr_id
+                                         AND puko1.rzeczywiste = ''T'') AS SUM_REAL_POINTS_VALUE,
+                                 (SELECT SUM(puko1.wartosc_punktow)
+                                    FROM lg_plo_punkty_kontrahenta puko1
+                                   WHERE     puko1.konr_id = puko.konr_id
+                                         AND puko1.rzeczywiste = ''N'') AS SUM_TEMPORARY_POINTS_VALUE, 
+                                 (SELECT SUM(puko1.wartosc_punktow)
+                                    FROM lg_plo_punkty_kontrahenta puko1
+                                   WHERE puko1.konr_id = puko.konr_id) AS SUM_POINTS_VALUE,                
+                                 NVL((SELECT CASE WHEN (SELECT MAX(id) FROM lg_plo_punkty_kontrahenta WHERE konr_id = puko.konr_id) = dosp.puko_id THEN dosp.data_faktury ELSE dosp.data_faktury + 1 END
+                                        FROM (SELECT puko1.id puko_id,
+                                                     puko1.konr_id konr_id,
+                                                     dosp.data_faktury data_faktury                                     
+                                                FROM lg_plo_punkty_kontrahenta puko1,
+                                                     lg_dokumenty_sprz_vw dosp
+                                               WHERE     dosp.id = puko1.dosp_id
+                                                     AND puko1.dosp_id IS NOT NULL
+                                            ORDER BY puko1.id desc) dosp
+                                       WHERE     dosp.konr_id = puko.konr_id
+                                             AND dosp.data_faktury IS NOT NULL
+                                             AND ROWNUM = 1), TO_DATE(''01-01-2000'', ''DD-MM-YYYY'')) CALCULATION_DATE,
+                                 puko.konr_id
+                           FROM lg_plo_punkty_kontrahenta puko,
+                                ap_kontrahenci konr
+                          WHERE     konr.id = puko.konr_id
+                                AND puko.id IN (:p_id)) puko',
+                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                     <xsl:strip-space elements="*"/>
+                     <xsl:template match="node()|@*">
+                        <xsl:copy>
+                           <xsl:apply-templates select="node()|@*"/>
+                        </xsl:copy>
+                     </xsl:template>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
+                     <xsl:template priority="2" match="ROW">
+                        <LOYALITY_POINT><xsl:apply-templates/></LOYALITY_POINT>
+                     </xsl:template>
+                     <xsl:template priority="2" match="HISTORY/HISTORY_ROW">
+                        <POINTS><xsl:apply-templates/></POINTS>            
+                     </xsl:template>
+                  </xsl:stylesheet>',
+                  'IN/loyality_points',
+                  'T',
+                  'OUT');
+                 
+     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
+          VALUES (jg_sqre_seq.NEXTVAL,
+                  'TRADE_CONTRACTS_INDIVIDUAL',
+                  'SELECT konr.nr_umowy_ind AS contract_number,
+       DECODE (individual_contract,
+               ''T'', konr.data_umowy_ind,
+               konr.atrybut_d01)
+           AS contract_date,
+       individual_contract AS individual_contract,
+       konr.foza_kod AS default_payment_type,
+       NVL (konr.limit_kredytowy, 0) AS credit_limit,
+       konr.dni_do_zaplaty AS payment_date,
+       prup.upust_procentowy AS discount_percent,
+       a_mp_dekoduj_pkt (konr.atrybut_t07, 0) AS quarter_points,
+       a_mp_dekoduj_pkt (konr.atrybut_t07, 1) AS half_year_points,
+       a_mp_dekoduj_pkt (konr.atrybut_t07, 2) AS year_points,
+       a_mp_dekoduj_pkt (konr.atrybut_t07, 3) AS quarter_discount,
+       a_mp_dekoduj_pkt (konr.atrybut_t07, 4) AS half_year_discount,
+       a_mp_dekoduj_pkt (konr.atrybut_t07, 5) AS year_discount,
+       konr.atrybut_n05 AS quarter_threshold,
+       konr.atrybut_n02 AS half_year_threshold,
+       konr.atrybut_n03 AS year_threshold,
+       DECODE (
+           (SELECT COUNT (*)
+              FROM lg_przyp_upustow prup1
+                   JOIN lg_upusty_tabelaryczne upta1
+                       ON prup1.upta_id = upta1.id
+             WHERE     upta1.symbol = ''SKONTO''
+                   AND SYSDATE BETWEEN prup1.data_od
+                                   AND NVL (prup1.data_do, SYSDATE)
+                   AND prup.konr_id = konr.id),
+           0, ''N'',
+           ''T'')
+           skonto
+  FROM (SELECT CASE
+                   WHEN konr.atrybut_t05 LIKE ''%UM IND%'' THEN ''T''
+                   ELSE ''N''
+               END
+                   individual_contract,
+               konr.*
+          FROM ap_kontrahenci konr) konr,
+       lg_przyp_upustow prup
+ WHERE prup.grod_id(+) = konr.grod_id AND konr.id IN ( :p_id)',
+                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                     <xsl:strip-space elements="*"/>
+                     <xsl:template match="node()|@*">
+                        <xsl:copy>
+                           <xsl:apply-templates select="node()|@*"/>
+                        </xsl:copy>
+                     </xsl:template>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
+                     <xsl:template priority="2" match="ROW">
+                        <TRADE_CONTRACTS><xsl:apply-templates/></TRADE_CONTRACTS>
+                     </xsl:template>
+                  </xsl:stylesheet>',
+                  'IN/trade_contracts',
+                 'T',
+                  'OUT');
+                  
+     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
+          VALUES (jg_sqre_seq.NEXTVAL,
+                  'TRADE_CONTRACTS',
+                  'SELECT konr.nr_umowy_ind AS contract_number,
+       DECODE (individual_contract,
+               ''T'', konr.data_umowy_ind,
+               konr.atrybut_d01)
+           AS contract_date,
+       individual_contract AS individual_contract,
+       konr.foza_kod AS default_payment_type,
+       NVL (konr.limit_kredytowy, 0) AS credit_limit,
+       konr.dni_do_zaplaty AS payment_date,
+       prup.upust_procentowy AS discount_percent,
+       konr.atrybut_n04 AS bonus_points,
+       DECODE (
+           (SELECT COUNT (*)
+              FROM lg_przyp_upustow prup1
+                   JOIN lg_upusty_tabelaryczne upta1
+                       ON prup1.upta_id = upta1.id
+             WHERE     upta1.symbol = ''SKONTO''
+                   AND SYSDATE BETWEEN prup1.data_od
+                                   AND NVL (prup1.data_do, SYSDATE)
+                   AND prup1.konr_id = konr.id),
+           0, ''N'',
+           ''T'')
+           skonto
+  FROM (SELECT CASE
+                   WHEN konr.atrybut_t05 LIKE ''%UM IND%'' THEN ''T''
+                   ELSE ''N''
+               END
+                   individual_contract,
+               konr.*
+          FROM ap_kontrahenci konr) konr,
+       lg_przyp_upustow prup
+ WHERE prup.grod_id(+) = konr.grod_id AND konr.id IN ( :p_id)',
+                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                     <xsl:strip-space elements="*"/>
+                     <xsl:template match="node()|@*">
+                        <xsl:copy>
+                           <xsl:apply-templates select="node()|@*"/>
+                        </xsl:copy>
+                     </xsl:template>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
+                     <xsl:template priority="2" match="ROW">
+                        <TRADE_CONTRACTS><xsl:apply-templates/></TRADE_CONTRACTS>
+                     </xsl:template>
+                  </xsl:stylesheet>',
+                  'IN/trade_contracts',
+                  'T',
+                  'OUT');
+ 
+     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
+          VALUES (jg_sqre_seq.NEXTVAL,
+                   'DELIVERIES',
+                   'SELECT doob.symbol         AS DOCUMENT_SYMBOL,
+                         doob.konr_symbol      AS CONTRACTOR_SYMBOL,
+                         doob.data_realizacji  AS REALIZATION_DATE,
+                         doob.numer            AS DOCUMENT_NUMBER,
+                         doob.numer_zamowienia AS ORDER_SYMBOL,
+                         CURSOR (SELECT dobi.numer       AS ORDINAL,
+                                        dobi.inma_symbol AS ITEM_SYMBOL,
+                                        dobi.inma_nazwa  AS ITEM_NAME,
+                                        dobi.ilosc       AS QUANTITY,
+                                        dobi.cena        AS PRICE,
+                                        dobi.wartosc     AS VALUE
+                                   FROM ap_dokumenty_obrot_it dobi
+                                  WHERE dobi.doob_id = doob.id
+                               ORDER BY dobi.numer ) AS LINES
+                    FROM ap_dokumenty_obrot doob
+                   WHERE     doob.wzty_kod = ''WZ''
+                         AND doob.numer_zamowienia IS NOT NULL
+                         AND doob.id IN (:p_id)',
+                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                     <xsl:strip-space elements="*"/>
+                     <xsl:template match="node()|@*">
+                        <xsl:copy>
+                           <xsl:apply-templates select="node()|@*"/>
+                        </xsl:copy>
+                     </xsl:template>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
+                     <xsl:template priority="2" match="ROW">
+                        <DELIVERY><xsl:apply-templates/></DELIVERY>
+                     </xsl:template>
+                     <xsl:template priority="2" match="LINES/LINES_ROW">
+                        <LINE><xsl:apply-templates/></LINE>
+                     </xsl:template>
+                  </xsl:stylesheet>',
+                  'IN/deliveries',
+                  'T',
+                  'OUT');    
 END;
 /
