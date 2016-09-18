@@ -713,7 +713,7 @@ INSERT INTO jg_sql_repository (id,
                      <xsl:template priority="2" match="ROW">
                         <DISCOUNT><xsl:apply-templates/></DISCOUNT>
                      </xsl:template>
-                  </xsl:styleshee>',
+                  </xsl:stylesheet>',
                   'IN/discounts',
                   'T',
                   'OUT');
