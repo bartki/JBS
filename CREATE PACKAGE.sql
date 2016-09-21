@@ -1644,13 +1644,13 @@ CREATE OR REPLACE PACKAGE jg_output_sync IS
 END;
 /
 
-CREATE OR REPLACE PACKAGE BODY jg_output_sync IS
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION format_number (
-        p_number                        IN      NUMBER,
-        p_digit                         IN      INT)
-        RETURN VARCHAR2 IS
-------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE PACKAGE BODY jg_output_sync
+IS
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION format_number (p_number IN NUMBER, p_digit IN INT)
+        RETURN VARCHAR2
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         IF p_number IS NULL
         THEN
@@ -1660,19 +1660,26 @@ CREATE OR REPLACE PACKAGE BODY jg_output_sync IS
             RETURN 0;
         END IF;
 
-        RETURN TRIM (TRAILING '.' FROM (TRIM (TRAILING 0 FROM TRIM (TO_CHAR (ROUND (p_number, p_digit), '9999999999999999999999999999990.000000000000000000')))));
+        RETURN TRIM (
+                   TRAILING '.' FROM (TRIM (
+                                          TRAILING 0 FROM TRIM (
+                                                              TO_CHAR (
+                                                                  ROUND (
+                                                                      p_number,
+                                                                      p_digit),
+                                                                  '9999999999999999999999999999990.000000000000000000')))));
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION sqre_rt (
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE)
-        RETURN jg_sql_repository%ROWTYPE IS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION sqre_rt (p_object_type IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_sql_repository%ROWTYPE
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
-        FOR r_sqre IN (SELECT *
-                         FROM jg_sql_repository sqre
-                        WHERE     sqre.object_type = p_object_type
-                              AND direction = 'OUT')
+        FOR r_sqre
+            IN (SELECT *
+                FROM jg_sql_repository sqre
+                WHERE sqre.object_type = p_object_type AND direction = 'OUT')
         LOOP
             RETURN r_sqre;
         END LOOP;
@@ -1680,80 +1687,98 @@ CREATE OR REPLACE PACKAGE BODY jg_output_sync IS
         RETURN NULL;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION get_query_from_sql_repository (
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE,
-        po_xslt                         OUT     jg_sql_repository.xslt%TYPE,
-        po_batch_guid                   OUT     jg_observed_operations.batch_guid%TYPE)
-        RETURN jg_sql_repository.sql_query%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        CURSOR c_sql_query (
-            pc_object_type                          jg_sql_repository.object_type%TYPE) IS
-            SELECT sql_query,
-                   xslt
-              FROM jg_sql_repository
-             WHERE object_type = pc_object_type;
-
-        v_sql_query                     jg_sql_repository.sql_query%TYPE;
-        r_sqre                          jg_sql_repository%ROWTYPE;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE set_batch (
+        p_batch_guid       jg_observed_operations.batch_guid%TYPE,
+        p_object_type   IN jg_sql_repository.object_type%TYPE)
+    IS
+        PRAGMA AUTONOMOUS_TRANSACTION;
     BEGIN
-        r_sqre  := sqre_rt (p_object_type);
+        UPDATE jg_observed_operations
+           SET batch_guid = p_batch_guid
+         WHERE     object_type = p_object_type
+               AND batch_guid IS NULL
+               AND ROWNUM < 1900;
+
+        COMMIT;
+    END;
+
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION get_query_from_sql_repository (
+        p_object_type   IN     jg_sql_repository.object_type%TYPE,
+        po_xslt            OUT jg_sql_repository.xslt%TYPE,
+        po_batch_guid      OUT jg_observed_operations.batch_guid%TYPE)
+        RETURN jg_sql_repository.sql_query%TYPE
+    IS
+        v_sql_query   jg_sql_repository.sql_query%TYPE;
+        r_sqre        jg_sql_repository%ROWTYPE;
+    BEGIN
+        r_sqre := sqre_rt (p_object_type);
 
         IF r_sqre.sql_query IS NULL
         THEN
-            assert (FALSE, 'Brak zdefiniowanego zapytania dla obiektu o typie ''' || p_object_type || '');
+            assert (
+                FALSE,
+                   'Brak zdefiniowanego zapytania dla obiektu o typie '''
+                || p_object_type
+                || '');
         ELSE
-            po_xslt           := r_sqre.xslt;
-            po_batch_guid     := SYS_GUID ();
+            po_xslt := r_sqre.xslt;
 
-            UPDATE jg_observed_operations
-               SET batch_guid = po_batch_guid
-             WHERE object_type = p_object_type
-                   AND ROWNUM < 500;
+            po_batch_guid := SYS_GUID ();
+            set_batch (po_batch_guid, p_object_type);
 
-            r_sqre.sql_query  :=
-                REPLACE (r_sqre.sql_query,
-                         ':p_id',
-                         'SELECT object_id FROM jg_observed_operations WHERE batch_guid = ''' || po_batch_guid || '''');
+            r_sqre.sql_query :=
+                REPLACE (
+                    r_sqre.sql_query,
+                    ':p_id',
+                       'SELECT object_id FROM jg_observed_operations WHERE batch_guid = '''
+                    || po_batch_guid
+                    || '''');
         END IF;
+
 
         RETURN r_sqre.sql_query;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE save_result (
-        p_object_type                   IN      jg_output_log.object_type%TYPE,
-        p_batch_guid                    IN      jg_observed_operations.batch_guid%TYPE,
-        p_xml                           IN      jg_output_log.xml%TYPE,
-        p_status                        IN      jg_output_log.status%TYPE,
-        p_file_name                     IN      jg_output_log.file_name%TYPE DEFAULT NULL,
-        p_error                         IN      jg_output_log.error%TYPE DEFAULT NULL) IS
-------------------------------------------------------------------------------------------------------------------------
+        p_object_type   IN jg_output_log.object_type%TYPE,
+        p_batch_guid    IN jg_observed_operations.batch_guid%TYPE,
+        p_xml           IN jg_output_log.xml%TYPE,
+        p_status        IN jg_output_log.status%TYPE,
+        p_file_name     IN jg_output_log.file_name%TYPE DEFAULT NULL,
+        p_error         IN jg_output_log.error%TYPE DEFAULT NULL)
+    IS
+        PRAGMA AUTONOMOUS_TRANSACTION;
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
-        INSERT INTO jg_output_log
-                    (id,
-                     object_type,
-                     status,
-                     xml,
-                     error,
-                     file_name,
-                     guid)
-             VALUES (jg_oulo_seq.NEXTVAL,
-                     p_object_type,
-                     p_status,
-                     p_xml,
-                     p_error,
-                     p_file_name,
-                     p_batch_guid);
+        INSERT INTO jg_output_log (id,
+                                   object_type,
+                                   status,
+                                   xml,
+                                   error,
+                                   file_name,
+                                   guid)
+        VALUES (jg_oulo_seq.NEXTVAL,
+                p_object_type,
+                p_status,
+                p_xml,
+                p_error,
+                p_file_name,
+                p_batch_guid);
+
+        COMMIT;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE save_result (
-        p_guid                          IN      jg_output_log.guid%TYPE,
-        p_status                        IN      jg_output_log.status%TYPE,
-        p_file_name                     IN      jg_output_log.file_name%TYPE DEFAULT NULL,
-        p_error                         IN      jg_output_log.error%TYPE DEFAULT NULL) IS
-------------------------------------------------------------------------------------------------------------------------
+        p_guid        IN jg_output_log.guid%TYPE,
+        p_status      IN jg_output_log.status%TYPE,
+        p_file_name   IN jg_output_log.file_name%TYPE DEFAULT NULL,
+        p_error       IN jg_output_log.error%TYPE DEFAULT NULL)
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         UPDATE jg_output_log oulo
            SET oulo.status = p_status,
@@ -1762,144 +1787,178 @@ CREATE OR REPLACE PACKAGE BODY jg_output_sync IS
          WHERE oulo.guid = p_guid;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE send_text_file_to_local_folder (
-        p_xml                           IN      CLOB,
-        p_file_name                     IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
-        FILE                            UTL_FILE.file_type;
-        l_pos                           INTEGER := 1;
-        xml_len                         INTEGER;
-        l_amount                        BINARY_INTEGER := 32767;
-        l_buffer                        VARCHAR2 (32767);
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_text_file_to_local_folder (p_xml         IN CLOB,
+                                              p_file_name   IN VARCHAR2)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        file       UTL_FILE.file_type;
+        l_pos      INTEGER := 1;
+        xml_len    INTEGER;
+        l_amount   BINARY_INTEGER := 32767;
+        l_buffer   VARCHAR2 (32767);
     BEGIN
-        FILE     := UTL_FILE.fopen (LOCATION => 'INFINITE', filename => p_file_name, open_mode => 'w');
-        xml_len  := DBMS_LOB.getlength (p_xml);
+        file :=
+            UTL_FILE.fopen (location    => 'INFINITE',
+                            filename    => p_file_name,
+                            open_mode   => 'w');
+        xml_len := DBMS_LOB.getlength (p_xml);
 
         WHILE l_pos <= xml_len
         LOOP
-            DBMS_LOB.READ (p_xml, l_amount, l_pos, l_buffer);
-            l_buffer  := REPLACE (l_buffer, CHR (13), NULL);
-            UTL_FILE.put (FILE => FILE, buffer => l_buffer);
-            l_pos     := l_pos + l_amount;
+            DBMS_LOB.read (p_xml,
+                           l_amount,
+                           l_pos,
+                           l_buffer);
+            l_buffer := REPLACE (l_buffer, CHR (13), NULL);
+            UTL_FILE.put (file => file, buffer => l_buffer);
+            l_pos := l_pos + l_amount;
         END LOOP;
 
-        UTL_FILE.fclose (FILE => FILE);
+        UTL_FILE.fclose (file => file);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE send_binary_file_to_loc_folder (
-        p_byte                          IN      BLOB,
-        p_file_name                     IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
-        FILE                            UTL_FILE.file_type;
-        l_pos                           INTEGER := 1;
-        data_len                        INTEGER;
-        l_amount                        BINARY_INTEGER := 32767;
-        l_buffer                        RAW (32767);
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_binary_file_to_loc_folder (p_byte        IN BLOB,
+                                              p_file_name   IN VARCHAR2)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        file       UTL_FILE.file_type;
+        l_pos      INTEGER := 1;
+        data_len   INTEGER;
+        l_amount   BINARY_INTEGER := 32767;
+        l_buffer   RAW (32767);
     BEGIN
-        FILE     := UTL_FILE.fopen (LOCATION => 'INFINITE', filename => p_file_name, open_mode => 'wb');
-        data_len  := DBMS_LOB.getlength (p_byte);
+        file :=
+            UTL_FILE.fopen (location    => 'INFINITE',
+                            filename    => p_file_name,
+                            open_mode   => 'wb');
+        data_len := DBMS_LOB.getlength (p_byte);
 
         WHILE l_pos <= data_len
         LOOP
-            DBMS_LOB.READ (p_byte, l_amount, l_pos, l_buffer);
-            UTL_FILE.put_raw (FILE => FILE, buffer => l_buffer);
-            UTL_FILE.fflush (FILE);
-            l_pos     := l_pos + l_amount;
+            DBMS_LOB.read (p_byte,
+                           l_amount,
+                           l_pos,
+                           l_buffer);
+            UTL_FILE.put_raw (file => file, buffer => l_buffer);
+            UTL_FILE.fflush (file);
+            l_pos := l_pos + l_amount;
         END LOOP;
 
-        UTL_FILE.fclose (FILE => FILE);
-
+        UTL_FILE.fclose (file => file);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE generate_attachments (
-        p_object_type                   IN      jg_observed_operations.object_type%TYPE,
-        p_object_id                     IN      jg_observed_operations.object_id%TYPE,
-        po_file_name                    OUT     jg_output_log.file_name%TYPE ) IS
-------------------------------------------------------------------------------------------------------------------------
+        p_object_type   IN     jg_observed_operations.object_type%TYPE,
+        p_object_id     IN     jg_observed_operations.object_id%TYPE,
+        po_file_name       OUT jg_output_log.file_name%TYPE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         CURSOR c_atta (
-            pc_atta_id                  pa_attachments.id%TYPE ) IS
+            pc_atta_id    pa_attachments.id%TYPE)
+        IS
             SELECT atta.file_content file_content,
                    atta.filename file_name,
                    atus.guid object_guid
               FROM pa_attachments atta
-              JOIN pa_attachment_uses atus
-                ON atta.id = atus.atta_id
+                   JOIN pa_attachment_uses atus ON atta.id = atus.atta_id
              WHERE atta.id = p_object_id;
 
-        r_atta                          c_atta%ROWTYPE;
-        v_object_id                     NUMBER(10,0);
-        r_sqre                          jg_sql_repository%ROWTYPE;
-        r_konr                          ap_kontrahenci%ROWTYPE;
-        v_file_name                     jg_output_log.file_name%TYPE;
-        v_file_extension                VARCHAR2(10);
-        v_individual_contract           VARCHAR2(1);
+        r_atta                  c_atta%ROWTYPE;
+        v_object_id             NUMBER (10, 0);
+        r_sqre                  jg_sql_repository%ROWTYPE;
+        r_konr                  ap_kontrahenci%ROWTYPE;
+        v_file_name             jg_output_log.file_name%TYPE;
+        v_file_extension        VARCHAR2 (10);
+        v_individual_contract   VARCHAR2 (1);
     BEGIN
         IF p_object_type IN ('CONTRACT_ATTACHMENT')
         THEN
-             OPEN c_atta(pc_atta_id => p_object_id);
-            FETCH c_atta
-             INTO r_atta;
+            OPEN c_atta (pc_atta_id => p_object_id);
+
+            FETCH c_atta   INTO r_atta;
+
             CLOSE c_atta;
 
-            v_object_id := Lg_Konr_Sql.Id_Guid_Uk_Wr(p_guid => r_atta.object_guid);
+            v_object_id :=
+                lg_konr_sql.id_guid_uk_wr (p_guid => r_atta.object_guid);
 
             IF v_object_id IS NOT NULL
             THEN
-                r_sqre  := sqre_rt ('TRADE_CONTRACTS');
+                r_sqre := sqre_rt ('TRADE_CONTRACTS');
 
-                r_konr := Lg_Konr_Sql.Rt(p_id => v_object_id);
+                r_konr := lg_konr_sql.rt (p_id => v_object_id);
 
-                IF r_konr.atrybut_t05 like '%UM IND%'
+                IF r_konr.atrybut_t05 LIKE '%UM IND%'
                 THEN
-                    v_file_name := r_sqre.file_location || '/' || r_konr.symbol || '_' || r_konr.nr_umowy_ind || '_' || r_konr.data_umowy_ind;
+                    v_file_name :=
+                           r_sqre.file_location
+                        || '/'
+                        || r_konr.symbol
+                        || '_'
+                        || r_konr.nr_umowy_ind
+                        || '_'
+                        || r_konr.data_umowy_ind;
                 ELSE
-                    v_file_name := r_sqre.file_location || '/' || r_konr.symbol || '_' || r_konr.nr_umowy_ind || '_' || r_konr.atrybut_t05;
+                    v_file_name :=
+                           r_sqre.file_location
+                        || '/'
+                        || r_konr.symbol
+                        || '_'
+                        || r_konr.nr_umowy_ind
+                        || '_'
+                        || r_konr.atrybut_t05;
                 END IF;
 
-                v_file_extension := SUBSTR(r_atta.file_name, INSTR(r_atta.file_name, '.', -1));
+                v_file_extension :=
+                    SUBSTR (r_atta.file_name,
+                            INSTR (r_atta.file_name, '.', -1));
                 po_file_name := v_file_name || v_file_extension;
 
-                Send_Binary_File_To_Ftp(p_byte => r_atta.file_content, p_file_name => po_file_name);
-                --send_binary_file_to_loc_folder(p_byte => r_atta.file_content, p_file_name => po_file_name);
+                send_binary_file_to_ftp (p_byte        => r_atta.file_content,
+                                         p_file_name   => po_file_name);
+            --send_binary_file_to_loc_folder(p_byte => r_atta.file_content, p_file_name => po_file_name);
             END IF;
         END IF;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE delete_observed_operations (
-        p_batch_guid                    IN      jg_observed_operations.batch_guid%TYPE) IS
-------------------------------------------------------------------------------------------------------------------------
+        p_batch_guid   IN jg_observed_operations.batch_guid%TYPE)
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         DELETE FROM jg_observed_operations
-              WHERE batch_guid = p_batch_guid;
+         WHERE batch_guid = p_batch_guid;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION create_xml (
-        p_sql_query                     IN      jg_sql_repository.sql_query%TYPE,
-        p_xslt                          IN      jg_sql_repository.xslt%TYPE,
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE)
-        RETURN CLOB IS
-------------------------------------------------------------------------------------------------------------------------
-        v_ctx                           DBMS_XMLSAVE.ctxtype;
-        v_xml_clob                      CLOB;
-        v_xml_type                      XMLTYPE;
-        r_current_format                pa_xmltype.tr_format;
+        p_sql_query     IN jg_sql_repository.sql_query%TYPE,
+        p_xslt          IN jg_sql_repository.xslt%TYPE,
+        p_object_type   IN jg_sql_repository.object_type%TYPE)
+        RETURN CLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_ctx              DBMS_XMLSAVE.ctxtype;
+        v_xml_clob         CLOB;
+        v_xml_type         XMLTYPE;
+        r_current_format   pa_xmltype.tr_format;
     BEGIN
-        r_current_format  := pa_xmltype.biezacy_format;
+        r_current_format := pa_xmltype.biezacy_format;
         pa_xmltype.set_short_format_xml ();
-        set_log('bb',p_sql_query);
-        v_ctx             := DBMS_XMLGEN.newcontext (querystring => p_sql_query);
-        DBMS_XMLGEN.setrowsettag (v_ctx, p_object_type);
-        v_xml_type        := DBMS_XMLGEN.getxmltype (v_ctx);
 
-        IF     p_xslt IS NOT NULL
-           AND v_xml_type IS NOT NULL
+
+
+        v_ctx := DBMS_XMLGEN.newcontext (querystring => p_sql_query);
+        DBMS_XMLGEN.setrowsettag (v_ctx, p_object_type);
+        v_xml_type := DBMS_XMLGEN.getxmltype (v_ctx);
+
+        IF p_xslt IS NOT NULL AND v_xml_type IS NOT NULL
         THEN
-            v_xml_type  := v_xml_type.transform (XMLTYPE (p_xslt));
+            v_xml_type := v_xml_type.transform (xmltype (p_xslt));
         END IF;
 
         pa_xmltype.ustaw_format (r_current_format);
@@ -1907,170 +1966,222 @@ CREATE OR REPLACE PACKAGE BODY jg_output_sync IS
 
         IF v_xml_type IS NOT NULL
         THEN
-            v_xml_clob  := v_xml_type.getclobval ();
+            v_xml_clob := v_xml_type.getclobval ();
         END IF;
 
         RETURN v_xml_clob;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE Send_Text_File_To_Ftp (
-        p_xml                           IN      CLOB,
-        p_file_name                     IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
-        v_connection                    UTL_TCP.connection;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_text_file_to_ftp (p_xml IN CLOB, p_file_name IN VARCHAR2)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_connection   UTL_TCP.connection;
     BEGIN
-        v_connection  :=
-            jg_ftp.login (p_host     => jg_ftp_configuration.sf_ftp_host,
-                          p_port     => jg_ftp_configuration.sf_ftp_port,
-                          p_user     => jg_ftp_configuration.sf_ftp_user,
-                          p_pass     => jg_ftp_configuration.sf_ftp_password);
-        jg_ftp.put_remote_ascii_data (p_conn => v_connection, p_file => p_file_name, p_data => p_xml);
+        v_connection :=
+            jg_ftp.login (p_host   => jg_ftp_configuration.sf_ftp_host,
+                          p_port   => jg_ftp_configuration.sf_ftp_port,
+                          p_user   => jg_ftp_configuration.sf_ftp_user,
+                          p_pass   => jg_ftp_configuration.sf_ftp_password);
+        jg_ftp.put_remote_ascii_data (p_conn   => v_connection,
+                                      p_file   => p_file_name,
+                                      p_data   => p_xml);
         jg_ftp.get_reply (v_connection);
         jg_ftp.LOGOUT (v_connection);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE Send_Binary_File_To_Ftp (
-        p_byte                          IN      BLOB,
-        p_file_name                     IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
-        v_connection                    UTL_TCP.connection;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_binary_file_to_ftp (p_byte        IN BLOB,
+                                       p_file_name   IN VARCHAR2)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_connection   UTL_TCP.connection;
     BEGIN
-        v_connection  :=
-            jg_ftp.login (p_host     => jg_ftp_configuration.sf_ftp_host,
-                          p_port     => jg_ftp_configuration.sf_ftp_port,
-                          p_user     => jg_ftp_configuration.sf_ftp_user,
-                          p_pass     => jg_ftp_configuration.sf_ftp_password);
+        v_connection :=
+            jg_ftp.login (p_host   => jg_ftp_configuration.sf_ftp_host,
+                          p_port   => jg_ftp_configuration.sf_ftp_port,
+                          p_user   => jg_ftp_configuration.sf_ftp_user,
+                          p_pass   => jg_ftp_configuration.sf_ftp_password);
 
-        jg_ftp.Put_Remote_Binary_Data (p_conn => v_connection, p_file => p_file_name, p_data => p_byte);
+        jg_ftp.put_remote_binary_data (p_conn   => v_connection,
+                                       p_file   => p_file_name,
+                                       p_data   => p_byte);
         jg_ftp.get_reply (v_connection);
         jg_ftp.LOGOUT (v_connection);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE Process IS
-------------------------------------------------------------------------------------------------------------------------
-        v_sql_query                     jg_sql_repository.sql_query%TYPE;
-        v_xml                           CLOB;
-        v_file_name                     jg_output_log.file_name%TYPE;
-        v_file_location                 jg_sql_repository.file_location%TYPE;
-        v_batch_guid                    jg_observed_operations.batch_guid%TYPE;
-        v_xslt                          jg_sql_repository.xslt%TYPE;
-        r_sqre                          jg_sql_repository%ROWTYPE;
-        v_status                        VARCHAR2 (10);
-        c_oper                          SYS_REFCURSOR;
-        v_count                         NUMBER;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE process
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_sql_query       jg_sql_repository.sql_query%TYPE;
+        v_xml             CLOB;
+        v_file_name       jg_output_log.file_name%TYPE;
+        v_file_location   jg_sql_repository.file_location%TYPE;
+        v_batch_guid      jg_observed_operations.batch_guid%TYPE;
+        v_xslt            jg_sql_repository.xslt%TYPE;
+        r_sqre            jg_sql_repository%ROWTYPE;
+        v_status          VARCHAR2 (10);
+        c_oper            SYS_REFCURSOR;
+        v_count           NUMBER;
     BEGIN
         LOOP
-            OPEN c_oper FOR SELECT COUNT(id) FROM jg_observed_operations WHERE batch_guid IS NULL;
-            FETCH c_oper
-             INTO v_count;
+            OPEN c_oper FOR
+                SELECT COUNT (id)
+                  FROM jg_observed_operations
+                 WHERE batch_guid IS NULL;
+
+            FETCH c_oper   INTO v_count;
+
+            CLOSE c_oper;
 
             EXIT WHEN v_count = 0;
 
             FOR r_operation IN (SELECT object_type
-                                  FROM jg_observed_operations
-                                 WHERE attachment = 'N'
-                                GROUP BY object_type)
+                                FROM jg_observed_operations
+                                WHERE attachment = 'N'
+                                GROUP BY object_type
+                                ORDER BY object_type)
             LOOP
-                r_sqre  := sqre_rt (r_operation.object_type);
+                r_sqre := sqre_rt (r_operation.object_type);
                 SAVEPOINT create_xml;
 
                 BEGIN
-                    v_sql_query  := get_query_from_sql_repository (r_operation.object_type, v_xslt, v_batch_guid);
-                    v_xml        := create_xml (v_sql_query, v_xslt, r_operation.object_type);
+                    v_sql_query :=
+                        get_query_from_sql_repository (
+                            r_operation.object_type,
+                            v_xslt,
+                            v_batch_guid);
+                    v_xml :=
+                        create_xml (v_sql_query,
+                                    v_xslt,
+                                    r_operation.object_type);
 
                     IF v_xml IS NULL
                     THEN
-                        v_status  := 'NO_DATA';
+                        v_status := 'NO_DATA';
                     ELSIF r_sqre.up_to_date = 'T'
                     THEN
-                        v_status  := 'READY';
+                        v_status := 'READY';
                     ELSE
-                        v_status  := 'SKIPPED';
+                        v_status := 'SKIPPED';
                     END IF;
 
-                    save_result (p_object_type     => r_operation.object_type,
-                                 p_batch_guid      => v_batch_guid,
-                                 p_xml             => v_xml,
-                                 p_status          => v_status);
+                    save_result (p_object_type   => r_operation.object_type,
+                                 p_batch_guid    => v_batch_guid,
+                                 p_xml           => v_xml,
+                                 p_status        => v_status);
 
                     delete_observed_operations (v_batch_guid);
                 EXCEPTION
                     WHEN OTHERS
                     THEN
                         ROLLBACK TO create_xml;
-                        save_result (p_object_type     => r_operation.object_type,
-                                     p_batch_guid      => v_batch_guid,
-                                     p_xml             => v_xml,
-                                     p_status          => 'ERROR',
-                                     p_error           => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                        save_result (
+                            p_object_type   => r_operation.object_type,
+                            p_batch_guid    => v_batch_guid,
+                            p_xml           => v_xml,
+                            p_status        => 'ERROR',
+                            p_error         =>    SQLERRM
+                                               || CHR (13)
+                                               || DBMS_UTILITY.format_error_backtrace);
                 END;
             END LOOP;
         END LOOP;
 
+
         FOR r_operation IN (SELECT *
-                              FROM jg_output_log
-                             WHERE status = 'READY')
+                            FROM jg_output_log
+                            WHERE status = 'READY')
         LOOP
             v_status := NULL;
 
             SAVEPOINT send_file;
-            r_sqre  := sqre_rt (r_operation.object_type);
+            r_sqre := sqre_rt (r_operation.object_type);
 
             BEGIN
-                v_file_name  := NVL (r_sqre.file_location, 'IN/') || '/' || REPLACE (r_operation.object_type || '_' || r_operation.id || '_'
-                                || TO_CHAR (SYSTIMESTAMP, 'YYYYMMDD_HH24MISS') || '.xml', '/', '-');
-                Send_Text_File_To_Ftp (p_xml => r_operation.xml, p_file_name => v_file_name);
-                save_result (p_guid => r_operation.guid, p_status => 'PROCESSED', p_file_name => v_file_name);
+                v_file_name :=
+                       NVL (r_sqre.file_location, 'IN/')
+                    || '/'
+                    || REPLACE (
+                              r_operation.object_type
+                           || '_'
+                           || r_operation.id
+                           || '_'
+                           || TO_CHAR (SYSTIMESTAMP, 'YYYYMMDD_HH24MISS')
+                           || '.xml',
+                           '/',
+                           '-');
+
+
+                send_text_file_to_ftp (p_xml         => r_operation.xml,
+                                       p_file_name   => v_file_name);
+
+                save_result (p_guid        => r_operation.guid,
+                             p_status      => 'PROCESSED',
+                             p_file_name   => v_file_name);
             EXCEPTION
                 WHEN OTHERS
                 THEN
                     ROLLBACK TO send_file;
-                    save_result (p_guid       => r_operation.guid,
-                                 p_status     => 'ERROR',
-                                 p_error      => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                    save_result (
+                        p_guid     => r_operation.guid,
+                        p_status   => 'ERROR',
+                        p_error    =>    SQLERRM
+                                      || CHR (13)
+                                      || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
 
-        FOR r_operation IN (SELECT * FROM jg_observed_operations WHERE attachment = 'T')
+        FOR r_operation IN (SELECT *
+                            FROM jg_observed_operations
+                            WHERE attachment = 'T')
         LOOP
             SAVEPOINT send_atta;
+
             BEGIN
                 v_batch_guid := SYS_GUID;
-                generate_attachments(p_object_type => r_operation.object_type, p_object_id => r_operation.object_id, po_file_name => v_file_name);
+                generate_attachments (
+                    p_object_type   => r_operation.object_type,
+                    p_object_id     => r_operation.object_id,
+                    po_file_name    => v_file_name);
 
-                save_result (p_object_type     => r_operation.object_type,
-                             p_batch_guid      => v_batch_guid,
-                             p_xml             => NULL,
-                             p_file_name       => v_file_name,
-                             p_status          => 'PROCESSED');
+                save_result (p_object_type   => r_operation.object_type,
+                             p_batch_guid    => v_batch_guid,
+                             p_xml           => NULL,
+                             p_file_name     => v_file_name,
+                             p_status        => 'PROCESSED');
 
-                DELETE FROM jg_observed_operations WHERE id = r_operation.id;
+                DELETE FROM jg_observed_operations
+                 WHERE id = r_operation.id;
             EXCEPTION
                 WHEN OTHERS
                 THEN
                     ROLLBACK TO send_atta;
-                    save_result (p_object_type  => r_operation.object_type,
-                                 p_batch_guid   => v_batch_guid,
-                                 p_xml          => NULL,
-                                 p_status       => 'ERROR',
-                                 p_error        => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                    save_result (
+                        p_object_type   => r_operation.object_type,
+                        p_batch_guid    => v_batch_guid,
+                        p_xml           => NULL,
+                        p_status        => 'ERROR',
+                        p_error         =>    SQLERRM
+                                           || CHR (13)
+                                           || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE Retry (
-        p_id                            IN      jg_output_log.id%TYPE) IS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE retry (p_id IN jg_output_log.id%TYPE)
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         NULL;
     END;
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
+
+
 CREATE OR REPLACE FUNCTION jg_dynamic_set_commponents (
     p_skkp_id    lg_kpl_skladniki_kompletu.id%TYPE)
     RETURN pa_lista_id.tt_lista_id PIPELINED AS
