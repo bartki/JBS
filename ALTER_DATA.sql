@@ -227,46 +227,56 @@ GROUP BY rndo.symbol_dokumentu,
          VALUES (jg_sqre_seq.NEXTVAL,
                  'INVOICES',
                  'SELECT header.symbol invoice_symbol,
-                         header.doc_type,
-                         header.doc_date invoice_date,
-                         header.sale_date sale_date,
-                         header.payment_date payment_date,
-                         header.currency currency,
-                         jg_output_sync.format_number(header.net_value, 2) net_value,
-                         jg_output_sync.format_number(header.gross_value, 2) gross_value,
-                         jg_output_sync.format_number(lg_dosp_sql.kwota_zaplat_na_dok(id), 2) amount_paid,
-                         CASE
-                            WHEN header.gross_value <= lg_dosp_sql.kwota_zaplat_na_dok(id) THEN ''T''
-                            ELSE ''N''
-                         END is_paid,
-                         header.payer_symbol payer_symbol,
-                         header.payer_name,
-                         header.payer_nip,
-                         header.payer_city,
-                         header.payer_postal_code payer_post_code,
-                         header.payer_street,
-                         header.payer_building,
-                         header.payer_apartment,
-                         header.receiver_symbol,
-                         header.receiver_name,
-                         header.delivery_type,
-                         CURSOR (SELECT ordinal ordinal,
-                                        item_symbol item_symbol,
-                                        item_name item_name,
-                                        unit unit_of_measure_code,
-                                        jg_output_sync.format_number(quantity, 100) quantity,
-                                        jg_output_sync.format_number(net_price, 2) net_price,
-                                        jg_output_sync.format_number(vat_percent, 2) vat_rate,
-                                        jg_output_sync.format_number(net_value, 2) net_value,
-                                        jg_output_sync.format_number(vat_value, 2) vat_value,
-                                        jg_output_sync.format_number(gross_value, 2) gross_value
-                                   FROM lg_sal_invoices_it
-                                  WHERE     line_type IN (''N'', ''P'')
-                                        AND document_id = header.id) lines
-                    FROM lg_sal_invoices header
-                   WHERE     header.approved = ''T''
-                         AND doc_type IN (''FS'', ''KS'')
-                         AND header.id IN (:p_id)',
+       (SELECT symbol
+          FROM lg_sal_orders sord
+         WHERE sord.id = header.source_order_id)
+           order_symbol,
+       header.doc_type,
+       header.doc_date invoice_date,
+       header.sale_date sale_date,
+       header.payment_date payment_date,
+       header.currency currency,
+       jg_output_sync.format_number (header.net_value, 2) net_value,
+       jg_output_sync.format_number (header.gross_value, 2) gross_value,
+       jg_output_sync.format_number (lg_dosp_sql.kwota_zaplat_na_dok (id), 2)
+           amount_paid,
+       CASE
+           WHEN header.gross_value <= lg_dosp_sql.kwota_zaplat_na_dok (id)
+           THEN
+               'T'
+           ELSE
+               'N'
+       END
+           is_paid,
+       header.payer_symbol payer_symbol,
+       header.payer_name,
+       header.payer_nip,
+       header.payer_city,
+       header.payer_postal_code payer_post_code,
+       header.payer_street,
+       header.payer_building,
+       header.payer_apartment,
+       header.receiver_symbol,
+       header.receiver_name,
+       header.delivery_type,
+       CURSOR (
+           SELECT ordinal ordinal,
+                  item_symbol item_symbol,
+                  item_name item_name,
+                  unit unit_of_measure_code,
+                  jg_output_sync.format_number (quantity, 100) quantity,
+                  jg_output_sync.format_number (net_price, 2) net_price,
+                  jg_output_sync.format_number (vat_percent, 2) vat_rate,
+                  jg_output_sync.format_number (net_value, 2) net_value,
+                  jg_output_sync.format_number (vat_value, 2) vat_value,
+                  jg_output_sync.format_number (gross_value, 2) gross_value
+             FROM lg_sal_invoices_it
+            WHERE line_type IN ('N', 'P') AND document_id = header.id)
+           lines
+  FROM lg_sal_invoices header
+ WHERE     header.approved = 'T'
+       AND doc_type IN ('FS', 'KS')
+       AND header.id IN (:p_id)',
                  '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
