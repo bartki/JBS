@@ -960,11 +960,11 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
 
 ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_xslt_from_repository (
-        p_object_type                   IN        jg_xslt_repository.object_type%TYPE)
+        p_object_type                   IN        jg_sql_repository.object_type%TYPE)
         RETURN jg_sql_repository.xslt%TYPE IS
 ------------------------------------------------------------------------------------------------------------------------
         CURSOR c_xslt (
-            pc_object_type jg_xslt_repository.object_type%TYPE ) IS
+            pc_object_type               jg_sql_repository.object_type%TYPE ) IS
             SELECT xslt
               FROM jg_sql_repository
              WHERE object_type = pc_object_type;
@@ -1010,7 +1010,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
 ------------------------------------------------------------------------------------------------------------------------
     FUNCTION transform_xml (
         p_xml                           IN        CLOB,
-        p_object_type                   IN        jg_xslt_repository.object_type%TYPE,
+        p_object_type                   IN        jg_sql_repository.object_type%TYPE,
         p_xslt                          IN        CLOB DEFAULT NULL)
         RETURN XMLTYPE IS
 ------------------------------------------------------------------------------------------------------------------------
@@ -1053,7 +1053,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
 ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_customer (
         p_xml                           IN        CLOB,
-        p_object_type                   IN        jg_xslt_repository.object_type%TYPE)
+        p_object_type                   IN        jg_sql_repository.object_type%TYPE)
         RETURN jg_input_log.object_id%TYPE IS
 ------------------------------------------------------------------------------------------------------------------------
         v_xml                           XMLTYPE;
@@ -1070,7 +1070,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
 ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_sale_order (
         p_operation_id                  IN        jg_output_log.id%TYPE,
-        p_object_type                   IN        jg_xslt_repository.object_type%TYPE)
+        p_object_type                   IN        jg_sql_repository.object_type%TYPE)
         RETURN jg_input_log.object_id%TYPE IS
 ------------------------------------------------------------------------------------------------------------------------
         v_xml               XMLTYPE;
