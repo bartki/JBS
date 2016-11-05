@@ -553,5 +553,13 @@ BEGIN
                                    p_operation_type     => 'UPDATE',
                                    p_attachment         => 'T');
     END IF;
+    
+    IF Pa_Atki_Agd.Code(p_id => :NEW.Atki_Id) IN ('INMTR_DKMT')
+    THEN
+        jg_obop_def.add_operation (p_object_id          => :NEW.id,
+                                   p_object_type        => 'COMMODITY_ATTACHMENT',
+                                   p_operation_type     => 'UPDATE',
+                                   p_attachment         => 'T');
+    END IF;
 END;
 /
