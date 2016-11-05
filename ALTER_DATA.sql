@@ -1,5 +1,6 @@
 DECLARE
     v_order_clob CLOB;
+    v_xslt       CLOB;
 BEGIN
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
          VALUES (jg_sqre_seq.NEXTVAL,
@@ -298,12 +299,16 @@ GROUP BY rndo.symbol_dokumentu,
                   'OUT');
 
     v_order_clob := 'SELECT header.*,
+                            TRUNC(TO_DATE(header.order_issue_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS'')) order_issue_date,
+                            TRUNC(TO_DATE(header.requested_delivery_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS'')) requested_delivery_date,
+                            wzrc.document_type document_type,
                             wzrc.pricing_type pricing_type,
                             pa_firm_sql.kod (wzrc.firm_id) company_code,
-                            wzrc.name wzorzec,
                             wzrc.place_of_issue place_of_issue,
                             NVL (wzrc.base_currency, wzrc.currency) currency,
+                            wzrc.payment_days payment_days,
                             pusp.kod pusp_kod,
+                            NVL(header.net_value * (header.order_discount/ 100), 0) order_discount_value,
                             CURSOR ( SELECT konr.symbol,
                                             konr.nazwa,
                                             konr.skrot,
@@ -329,7 +334,7 @@ GROUP BY rndo.symbol_dokumentu,
                                             adge.poczta
                                        FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
                                       WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
-                                            AND konr.symbol = header.customer_symbol) platnik,
+                                            AND konr.symbol = header.seller_buyer_id) platnik,
                             CURSOR ( SELECT konr.symbol,
                                             konr.nazwa,
                                             konr.skrot,
@@ -342,51 +347,413 @@ GROUP BY rndo.symbol_dokumentu,
                                             adge.poczta
                                        FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
                                       WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
-                                            AND konr.symbol = header.supplier_symbol) odbiorca,
+                                            AND konr.symbol = header.seller_buyer_id ) odbiorca,
                             CURSOR ( SELECT item_xml.*,
+                                            (item_xml.unit_price_base - item_xml.unit_price_value) discount_value,
                                             inma.nazwa commodity_name,
                                             inma.jdmr_nazwa_pdst_sp jdmr_nazwa,
-                                            api_rk_stva.kod (inma.stva_id) kod_stawki_vat,
+                                            api_rk_stva.kod (inma.stva_id) inma_stva_code,
                                             NVL (wzrc.base_currency, wzrc.currency) currency
                                        FROM jg_input_log log1,
                                             ap_indeksy_materialowe inma,
-                                            XMLTABLE ( ''//Order/Items/Item''
+                                            XMLTABLE ( ''//Order/OrderDetail/Item''
                                                        PASSING xmltype (log1.xml)
-                                                       COLUMNS ordinal_number    VARCHAR2 (30) PATH ''/Item/OrdinalNumber'',
-                                                               note              VARCHAR2 (30) PATH ''/Item/Comment'',
-                                                               commodity_id      VARCHAR2 (30) PATH ''/Item/CommodityID'',
-                                                               quantity_ordered  VARCHAR2 (30) PATH ''/Item/QuantityOrdered'',
-                                                               discount          VARCHAR2 (30) PATH ''/Item/Discount'',
-                                                               promotion_code    VARCHAR2 (30) PATH ''/Item/PromotionCode'',
-                                                               promotion_name    VARCHAR2 (30) PATH ''/Item/PromotionName'',
-                                                               net_price         VARCHAR2 (30) PATH ''/Item/NetPrice'',
-                                                               commodity_ean     VARCHAR2 (30) PATH ''/Item/CommodityEAN'') item_xml
+                                                       COLUMNS item_num               VARCHAR2 (30) PATH ''/Item/ItemNum'',
+                                                               seller_item_id         VARCHAR2 (30) PATH ''/Item/SellerItemID'',
+                                                               name                   VARCHAR2 (70) PATH ''/Item/Name'',                                                               
+                                                               unit_of_measure        VARCHAR2 (30) PATH ''/Item/UnitOfMeasure'',                                                               
+                                                               quantity_value         VARCHAR2 (30) PATH ''/Item/QuantityValue'',
+                                                               tax_percent            VARCHAR2 (30) PATH ''/Item/TaxPercent'',
+                                                               unit_price_value       VARCHAR2 (30) PATH ''/Item/UnitPriceValue'',
+                                                               unit_price_base        VARCHAR2 (30) PATH ''/Item/UnitPriceBase'',
+                                                               unit_discount_value    VARCHAR2 (30) PATH ''/Item/UnitDiscountValue'',
+                                                               unit_discount          VARCHAR2 (30) PATH ''/Item/UnitDiscount'',
+                                                               promotion_code         VARCHAR2 (30) PATH ''/Item/PromotionCode'',
+                                                               promotion_name         VARCHAR2 (30) PATH ''/Item/PromotionName'') item_xml                                                               
                                       WHERE     log1.id = LOG.id
-                                            AND inma.indeks = item_xml.commodity_id) items
+                                            AND inma.indeks = item_xml.seller_item_id) items
                        FROM jg_input_log LOG,
                             lg_documents_templates wzrc,
                             lg_punkty_sprzedazy pusp,
                             XMLTABLE ( ''//Order''
                                        PASSING xmltype (LOG.xml)
-                                       COLUMNS id                      VARCHAR2 (30) PATH ''/Order/ID'',
-                                               customer_symbol         VARCHAR2 (30) PATH ''/Order/CustomerID'',
-                                               supplier_symbol         VARCHAR2 (30) PATH ''/Order/SupplierID'',
-                                               realization_date        DATE          PATH ''/Order/RealizationDate'',
-                                               sales_representative_id VARCHAR2 (30) PATH ''/Order/SalesRepresentativeID'',
-                                               payment_method_id       VARCHAR2 (30) PATH ''/Order/PaymentMethodID'',
-                                               delivery_method_id      VARCHAR2 (30) PATH ''/Order/DeliveryMethodID'',
-                                               discount                VARCHAR2 (30) PATH ''/Order/Discount'',
-                                               note                    VARCHAR2 (30) PATH ''/Order/Comment'',
-                                               net_value               VARCHAR2 (30) PATH ''/Order/NetValue'') header
+                                       COLUMNS order_number               VARCHAR2 (30)      PATH ''/Order/OrderHeader/OrderNumber'',
+                                              order_pattern               VARCHAR2 (100)     PATH ''/Order/OrderHeader/OrderPattern'',
+                                              order_type                  VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderType'',
+                                              order_issue_date_bc         VARCHAR2 (30)      PATH ''/Order/OrderHeader/OrderIssueDate'',
+                                              requested_delivery_date_bc  VARCHAR2 (30)      PATH ''/Order/OrderHeader/RequestedDeliveryDate'',
+                                              note                        VARCHAR2 (100)     PATH ''/Order/OrderHeader/Comment'',
+                                              order_discount              VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderDiscount'',                                               
+                                              payment_method_code         VARCHAR2 (6)       PATH ''/Order/OrderHeader/PaymentMethod/Code'',
+                                              transportation_code         VARCHAR2 (3)       PATH ''/Order/OrderHeader/Transportation/Code'',                                               
+                                              seller_buyer_id             VARCHAR2 (30)      PATH ''/Order/OrderParty/BuyerParty/SellerBuyerID'',
+                                              seller_contact_tel          VARCHAR2 (30)      PATH ''/Order/OrderParty/BuyerParty/Contact/Tel'',
+                                              sr_party_description        VARCHAR2 (30)      PATH ''/Order/OrderParty/SRParty/Description'',
+                                              net_value                   VARCHAR2(30)        PATH ''/Order/OrderSummary/TotalNetAmount'',
+                                              gross_value                 VARCHAR2(30)        PATH ''/Order/OrderSummary/TotalGrossAmount'' ) header
                       WHERE     pusp.id = wzrc.pusp_id
-                            AND wzrc.id = :p_wzrc_id
+                            AND wzrc.pattern = header.order_pattern
                             AND LOG.id = :p_operation_id';
+                            
+    v_xslt := '<?xml version="1.0" encoding="UTF-8"?>
+                 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                 <xsl:output method="xml" encoding="windows-1250" indent="yes"/>
+  <xsl:template match="/">
+    <LG_ZASP_T>
+      <xsl:for-each select="ORDER">
+        <xsl:for-each select="ORDER_NUMBER">
+          <SYMBOL_ODBIORCY>
+            <xsl:value-of select="."/>
+          </SYMBOL_ODBIORCY>
+        </xsl:for-each>
+        <xsl:for-each select="ORDER_PATTERN">
+          <WZORZEC>
+            <xsl:value-of select="."/>
+          </WZORZEC>
+        </xsl:for-each>
+        <xsl:for-each select="DOCUMENT_TYPE">
+          <TYP_ZAMOWIENIA>
+            <xsl:value-of select="."/>
+          </TYP_ZAMOWIENIA>
+        </xsl:for-each>
+        <xsl:for-each select="ORDER_ISSUE_DATE">
+          <DATA_WYSTAWIENIA>
+            <xsl:value-of select="."/>
+          </DATA_WYSTAWIENIA>
+        </xsl:for-each>
+        <xsl:for-each select="REQUESTED_DELIVERY_DATE">
+          <DATA_REALIZACJI>
+            <xsl:value-of select="."/>
+          </DATA_REALIZACJI>
+        </xsl:for-each>
+        <xsl:for-each select="PLACE_OF_ISSUE">
+          <MIEJSCE_WYSTAWIENIA>
+            <xsl:value-of select="."/>
+          </MIEJSCE_WYSTAWIENIA>
+        </xsl:for-each>
+        <xsl:for-each select="COMPANY_CODE">
+          <KOD_FIRMY>
+            <xsl:value-of select="."/>
+          </KOD_FIRMY>
+        </xsl:for-each>
+        <xsl:for-each select="NOTE">
+          <UWAGI>
+            <xsl:value-of select="."/>
+          </UWAGI>
+        </xsl:for-each>
+        <xsl:for-each select="CURRENCY">
+          <KOD_WALUTY_CENNIKA>
+            <xsl:value-of select="."/>
+          </KOD_WALUTY_CENNIKA>
+        </xsl:for-each>
+        <xsl:for-each select="PAYMENT_METHOD_CODE">
+          <KOD_FORMY_ZAPLATY>
+            <xsl:value-of select="."/>
+          </KOD_FORMY_ZAPLATY>
+        </xsl:for-each>
+        <xsl:for-each select="TRANSPORTATION_CODE">
+          <KOD_SPOSOBU_DOSTAWY>
+            <xsl:value-of select="."/>
+          </KOD_SPOSOBU_DOSTAWY>
+        </xsl:for-each>
+        <xsl:for-each select="PRICING_TYPE">
+          <WG_JAKICH_CEN>
+            <xsl:value-of select="."/>
+          </WG_JAKICH_CEN>
+        </xsl:for-each>
+        <xsl:for-each select="ORDER_DISCOUNT_VALUE">
+          <OPUST_GLOB_KWOTA>
+            <xsl:value-of select="."/>
+          </OPUST_GLOB_KWOTA>
+        </xsl:for-each>
+        <xsl:for-each select="ORDER_DISCOUNT">
+          <OPUST_GLOB_PROC_OD_WART_BEZ_UP>
+            <xsl:value-of select="."/>
+          </OPUST_GLOB_PROC_OD_WART_BEZ_UP>
+        </xsl:for-each>
+        <xsl:for-each select="PAYMENT_DAYS">
+          <ILOSC_DNI_DO_ZAPLATY>
+            <xsl:value-of select="."/>
+          </ILOSC_DNI_DO_ZAPLATY>
+        </xsl:for-each>
+        <xsl:for-each select="PUSP_KOD">
+          <KOD_PUNKTU_SPRZEDAZY>
+            <xsl:value-of select="."/>
+          </KOD_PUNKTU_SPRZEDAZY>
+        </xsl:for-each>
+        <xsl:for-each select="NET_VALUE">
+          <WARTOSC_NETTO>
+            <xsl:value-of select="."/>
+          </WARTOSC_NETTO>
+        </xsl:for-each>
+        <xsl:for-each select="GROSS_VALUE">
+          <WARTOSC_BRUTTO>
+            <xsl:value-of select="."/>
+          </WARTOSC_BRUTTO>
+        </xsl:for-each>
+        <WSKAZNIK_ZATWIERDZENIA>N</WSKAZNIK_ZATWIERDZENIA>
+        <xsl:for-each select="SPRZEDAWCA">
+          <xsl:for-each select="SPRZEDAWCA_ROW">
+            <SPRZEDAWCA>
+              <xsl:for-each select="SYMBOL">
+                <SYMBOL>
+                  <xsl:value-of select="."/>
+                </SYMBOL>
+              </xsl:for-each>
+              <xsl:for-each select="NAZWA">
+                <NAZWA>
+                  <xsl:value-of select="."/>
+                </NAZWA>
+              </xsl:for-each>
+              <xsl:for-each select="SKROT">
+                <SKROT>
+                  <xsl:value-of select="."/>
+                </SKROT>
+              </xsl:for-each>
+              <xsl:for-each select="NIP">
+                <NIP>
+                  <xsl:value-of select="."/>
+                </NIP>
+              </xsl:for-each>
+              <ADRES>
+                <xsl:for-each select="MIEJSCOWOSC">
+                  <MIEJSCOWOSC>
+                    <xsl:value-of select="."/>
+                  </MIEJSCOWOSC>
+                </xsl:for-each>
+                <xsl:for-each select="ULICA">
+                  <ULICA>
+                    <xsl:value-of select="."/>
+                  </ULICA>
+                </xsl:for-each>
+                <xsl:for-each select="KOD_POCZTOWY">
+                  <KOD_POCZTOWY>
+                    <xsl:value-of select="."/>
+                  </KOD_POCZTOWY>
+                </xsl:for-each>
+                <xsl:for-each select="NR_DOMU">
+                  <NR_DOMU>
+                    <xsl:value-of select="."/>
+                  </NR_DOMU>
+                </xsl:for-each>
+                <xsl:for-each select="NR_LOKALU">
+                  <NR_LOKALU>
+                    <xsl:value-of select="."/>
+                  </NR_LOKALU>
+                </xsl:for-each>
+              </ADRES>
+            </SPRZEDAWCA>
+          </xsl:for-each>
+        </xsl:for-each>
+        <xsl:for-each select="PLATNIK">
+          <xsl:for-each select="PLATNIK_ROW">
+            <PLATNIK>
+              <xsl:for-each select="SYMBOL">
+                <SYMBOL>
+                  <xsl:value-of select="."/>
+                </SYMBOL>
+              </xsl:for-each>
+              <xsl:for-each select="NAZWA">
+                <NAZWA>
+                  <xsl:value-of select="."/>
+                </NAZWA>
+              </xsl:for-each>
+              <xsl:for-each select="SKROT">
+                <SKROT>
+                  <xsl:value-of select="."/>
+                </SKROT>
+              </xsl:for-each>
+              <xsl:for-each select="NIP">
+                <NIP>
+                  <xsl:value-of select="."/>
+                </NIP>
+              </xsl:for-each>
+              <ADRES>
+                <xsl:for-each select="MIEJSCOWOSC">
+                  <MIEJSCOWOSC>
+                    <xsl:value-of select="."/>
+                  </MIEJSCOWOSC>
+                </xsl:for-each>
+                <xsl:for-each select="ULICA">
+                  <ULICA>
+                    <xsl:value-of select="."/>
+                  </ULICA>
+                </xsl:for-each>
+                <xsl:for-each select="KOD_POCZTOWY">
+                  <KOD_POCZTOWY>
+                    <xsl:value-of select="."/>
+                  </KOD_POCZTOWY>
+                </xsl:for-each>
+                <xsl:for-each select="NR_DOMU">
+                  <NR_DOMU>
+                    <xsl:value-of select="."/>
+                  </NR_DOMU>
+                </xsl:for-each>
+                <xsl:for-each select="NR_LOKALU">
+                  <NR_LOKALU>
+                    <xsl:value-of select="."/>
+                  </NR_LOKALU>
+                </xsl:for-each>
+              </ADRES>
+            </PLATNIK>
+          </xsl:for-each>
+        </xsl:for-each>
+        <xsl:for-each select="ODBIORCA">
+          <xsl:for-each select="ODBIORCA_ROW">
+            <ODBIORCA>
+              <xsl:for-each select="SYMBOL">
+                <SYMBOL>
+                  <xsl:value-of select="."/>
+                </SYMBOL>
+              </xsl:for-each>
+              <xsl:for-each select="NAZWA">
+                <NAZWA>
+                  <xsl:value-of select="."/>
+                </NAZWA>
+              </xsl:for-each>
+              <xsl:for-each select="SKROT">
+                <SKROT>
+                  <xsl:value-of select="."/>
+                </SKROT>
+              </xsl:for-each>
+              <xsl:for-each select="NIP">
+                <NIP>
+                  <xsl:value-of select="."/>
+                </NIP>
+              </xsl:for-each>
+              <ADRES>
+                <xsl:for-each select="MIEJSCOWOSC">
+                  <MIEJSCOWOSC>
+                    <xsl:value-of select="."/>
+                  </MIEJSCOWOSC>
+                </xsl:for-each>
+                <xsl:for-each select="ULICA">
+                  <ULICA>
+                    <xsl:value-of select="."/>
+                  </ULICA>
+                </xsl:for-each>
+                <xsl:for-each select="KOD_POCZTOWY">
+                  <KOD_POCZTOWY>
+                    <xsl:value-of select="."/>
+                  </KOD_POCZTOWY>
+                </xsl:for-each>
+                <xsl:for-each select="NR_DOMU">
+                  <NR_DOMU>
+                    <xsl:value-of select="."/>
+                  </NR_DOMU>
+                </xsl:for-each>
+                <xsl:for-each select="NR_LOKALU">
+                  <NR_LOKALU>
+                    <xsl:value-of select="."/>
+                  </NR_LOKALU>
+                </xsl:for-each>
+              </ADRES>
+            </ODBIORCA>
+          </xsl:for-each>
+        </xsl:for-each>
+        <POLA_DODATKOWE>
+          <xsl:for-each select="SR_PARTY_DESCRIPTION">
+            <PA_POLE_DODATKOWE_T>
+              <NAZWA>ATRYBUT_T08</NAZWA>
+              <WARTOSC>
+                <xsl:value-of select="."/>
+              </WARTOSC>
+            </PA_POLE_DODATKOWE_T>
+          </xsl:for-each>
+        </POLA_DODATKOWE>
+        <POZYCJE>
+          <xsl:for-each select="ITEMS">
+            <xsl:for-each select="ITEMS_ROW">
+              <LG_ZASI_T>
+                <xsl:for-each select="ITEM_NUM">
+                  <LP>
+                    <xsl:value-of select="."/>
+                  </LP>
+                </xsl:for-each>
+                <INDEKS>
+                  <xsl:for-each select="SELLER_ITEM_ID">
+                    <INDEKS>
+                      <xsl:value-of select="."/>
+                    </INDEKS>
+                  </xsl:for-each>
+                  <xsl:for-each select="NAME">
+                    <NAZWA>
+                      <xsl:value-of select="."/>
+                    </NAZWA>
+                  </xsl:for-each>
+                </INDEKS>
+                <xsl:for-each select="INMA_STVA_CODE">
+                  <KOD_STAWKI_VAT>
+                    <xsl:value-of select="."/>
+                  </KOD_STAWKI_VAT>
+                </xsl:for-each>
+                <xsl:for-each select="QUANTITY_VALUE">
+                  <ILOSC>
+                    <xsl:value-of select="."/>
+                  </ILOSC>
+                </xsl:for-each>
+                <xsl:for-each select="CURRENCY">
+                  <KOD_WALUTY>
+                    <xsl:value-of select="."/>
+                  </KOD_WALUTY>
+                </xsl:for-each>
+                <xsl:for-each select="UNIT_PRICE_BASE">
+                  <CENA>
+                    <xsl:value-of select="."/>
+                  </CENA>
+                </xsl:for-each>
+                <xsl:for-each select="UNIT_PRICE_BASE">
+                  <CENA_Z_CENNIKA>
+                    <xsl:value-of select="."/>
+                  </CENA_Z_CENNIKA>
+                </xsl:for-each>
+                <xsl:for-each select="UNIT_PRICE_BASE">
+                  <CENA_Z_CENNIKA_WAL>
+                    <xsl:value-of select="."/>
+                  </CENA_Z_CENNIKA_WAL>
+                </xsl:for-each>
+                <xsl:for-each select="DISCOUNT_VALUE">
+                  <OPUST_NA_POZYCJI>
+                    <xsl:value-of select="."/>
+                  </OPUST_NA_POZYCJI>
+                </xsl:for-each>
+                <POLA_DODATKOWE>
+                  <xsl:for-each select="PROMOTION_CODE">
+                    <PA_POLE_DODATKOWE_T>
+                      <NAZWA>ATRYBUT_T01</NAZWA>
+                      <WARTOSC>
+                        <xsl:value-of select="."/>
+                      </WARTOSC>
+                    </PA_POLE_DODATKOWE_T>
+                  </xsl:for-each>
+                  <xsl:for-each select="PROMOTION_NAME">
+                    <PA_POLE_DODATKOWE_T>
+                      <NAZWA>ATRYBUT_T02</NAZWA>
+                      <WARTOSC>
+                        <xsl:value-of select="."/>
+                      </WARTOSC>
+                    </PA_POLE_DODATKOWE_T>
+                  </xsl:for-each>
+                </POLA_DODATKOWE>
+                <xsl:for-each select="UNIT_OF_MEASURE">
+                  <NAZWA_JEDNOSTKI_MIARY>
+                    <xsl:value-of select="."/>
+                  </NAZWA_JEDNOSTKI_MIARY>
+                </xsl:for-each>
+              </LG_ZASI_T>
+            </xsl:for-each>
+          </xsl:for-each>
+        </POZYCJE>
+      </xsl:for-each>
+    </LG_ZASP_T>
+  </xsl:template>
+</xsl:stylesheet>';
 
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'ORDER',
                  v_order_clob,
-                 NULL,
+                 v_xslt,
                  'OUT/orders',
                  'T',
                  'IN');
@@ -562,6 +929,95 @@ INSERT INTO jg_sql_repository (id,
                     'T',
                     'OUT');
 
+    v_xslt := '<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" encoding="windows-1250" indent="yes"/>
+  <xsl:template match="/">
+    <PA_KONTRAHENT_TK xmlns="http://www.teta.com.pl/teta2000/kontrahent-1" wersja="1.0">
+      <xsl:for-each select="NewCustomer">
+        <xsl:for-each select="BasicData">
+          <xsl:for-each select="MobizID">
+            <SYMBOL>
+              <xsl:value-of select="."/>
+            </SYMBOL>
+          </xsl:for-each>
+          <xsl:for-each select="Name">
+            <NAZWA>
+              <xsl:value-of select="."/>
+            </NAZWA>
+          </xsl:for-each>
+          <xsl:for-each select="Shortcut">
+            <SKROT>
+              <xsl:value-of select="."/>
+            </SKROT>
+          </xsl:for-each>
+          <xsl:for-each select="TIN">
+            <NIP>
+              <xsl:value-of select="."/>
+            </NIP>
+          </xsl:for-each>
+          <ADRES>
+            <xsl:for-each select="Address">
+              <xsl:for-each select="City">
+                <MIEJSCOWOSC>
+                  <xsl:value-of select="."/>
+                </MIEJSCOWOSC>
+              </xsl:for-each>
+              <xsl:for-each select="Street">
+                <ULICA>
+                  <xsl:value-of select="."/>
+                </ULICA>
+              </xsl:for-each>
+              <xsl:for-each select="Postcode">
+                <KOD_POCZTOWY>
+                  <xsl:value-of select="."/>
+                </KOD_POCZTOWY>
+              </xsl:for-each>
+            </xsl:for-each>
+            <xsl:for-each select="Phone">
+              <NR_TEL>
+                <VARCHAR2>
+                  <xsl:value-of select="."/>
+                </VARCHAR2>
+              </NR_TEL>
+            </xsl:for-each>
+            <xsl:for-each select="Fax">
+              <NR_FAX>
+                <VARCHAR2>
+                  <xsl:value-of select="."/>
+                </VARCHAR2>
+              </NR_FAX>
+            </xsl:for-each>
+            <ADRESY_EMAIL>
+              <xsl:for-each select="Email">
+                <VARCHAR2>
+                  <xsl:value-of select="."/>
+                </VARCHAR2>
+              </xsl:for-each>
+            </ADRESY_EMAIL>
+            <RegionID>080</RegionID>
+            <ProvinceID>450</ProvinceID>
+          </ADRES>
+          <ClassID>Detal</ClassID>
+          <Profile>Reseller</Profile>
+          <ContactPerson>Tomasz Wspaniały</ContactPerson>
+          <ChainID>123</ChainID>
+        </xsl:for-each>
+        <AdditionalData>
+          <SalesRepresentativeID>5235</SalesRepresentativeID>
+        </AdditionalData>
+        <PLATNIK_VAT>T</PLATNIK_VAT>
+        <BLOKADA_ZAKUPU>N</BLOKADA_ZAKUPU>
+        <RODZAJ_DATY_WAR_HANDL_FAKT>S</RODZAJ_DATY_WAR_HANDL_FAKT>
+        <RODZAJ_DATY_WAR_HANDL_ZAM>W</RODZAJ_DATY_WAR_HANDL_ZAM>
+        <RODZAJ_DATY_TERM_PLAT_FS>DW</RODZAJ_DATY_TERM_PLAT_FS>
+        <GRUPY_KONTRHENTA/>
+        <JEDNOSTKI_OSOBY/>
+      </xsl:for-each>
+    </PA_KONTRAHENT_TK>
+  </xsl:template>
+</xsl:stylesheet>';
+
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'NEW_CONTRACTORS',
@@ -587,21 +1043,7 @@ INSERT INTO jg_sql_repository (id,
                     WHERE     osol.atrybut_t01 IS NOT NULL
                           AND osol.osby_id = osby.id
                           AND osol.id IN (:p_id)',
-                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
-                     <xsl:strip-space elements="*"/>
-                     <xsl:template match="node()|@*">
-                        <xsl:copy>
-                           <xsl:apply-templates select="node()|@*"/>
-                        </xsl:copy>
-                     </xsl:template>
-                     <xsl:template priority="2" match="ROW">
-                        <SALES_REPRESENTATIVE><xsl:apply-templates/></SALES_REPRESENTATIVE>
-                     </xsl:template>
-                     <xsl:template priority="2" match="CUSTOMERS/CUSTOMERS_ROW">
-                        <CUSTOMER><xsl:apply-templates/></CUSTOMER>
-                     </xsl:template>
-                  </xsl:stylesheet>',
+                 v_xslt,,
                  'OUT/new_customer',
                  'T',
                  'IN');
