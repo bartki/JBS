@@ -1043,11 +1043,130 @@ INSERT INTO jg_sql_repository (id,
                     WHERE     osol.atrybut_t01 IS NOT NULL
                           AND osol.osby_id = osby.id
                           AND osol.id IN (:p_id)',
-                 v_xslt,,
+                 v_xslt,
                  'OUT/new_customer',
                  'T',
                  'IN');
 
+    v_xslt := '<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" encoding="windows-1250" indent="yes"/>
+  <xsl:template match="/">
+    <PA_KONTRAHENT_TK xmlns="http://www.teta.com.pl/teta2000/kontrahent-1" wersja="1.0">
+      <xsl:for-each select="CustomerData">
+        <xsl:for-each select="BasicData">
+          <xsl:for-each select="MobizID">
+            <SYMBOL>
+              <xsl:value-of select="."/>
+            </SYMBOL>
+          </xsl:for-each>
+          <xsl:for-each select="Name">
+            <NAZWA>
+              <xsl:value-of select="."/>
+            </NAZWA>
+          </xsl:for-each>
+          <xsl:for-each select="Shortcut">
+            <SKROT>
+              <xsl:value-of select="."/>
+            </SKROT>
+          </xsl:for-each>
+          <xsl:for-each select="TIN">
+            <NIP>
+              <xsl:value-of select="."/>
+            </NIP>
+          </xsl:for-each>
+          <ADRES>
+            <xsl:for-each select="Address">
+              <xsl:for-each select="City">
+                <MIEJSCOWOSC>
+                  <xsl:value-of select="."/>
+                </MIEJSCOWOSC>
+              </xsl:for-each>
+              <xsl:for-each select="Street">
+                <ULICA>
+                  <xsl:value-of select="."/>
+                </ULICA>
+              </xsl:for-each>
+              <xsl:for-each select="Postcode">
+                <KOD_POCZTOWY>
+                  <xsl:value-of select="."/>
+                </KOD_POCZTOWY>
+              </xsl:for-each>
+            </xsl:for-each>
+            <xsl:for-each select="Phone">
+              <NR_TEL>
+                <VARCHAR2>
+                  <xsl:value-of select="."/>
+                </VARCHAR2>
+              </NR_TEL>
+            </xsl:for-each>
+            <xsl:for-each select="Fax">
+              <NR_FAX>
+                <VARCHAR2>
+                  <xsl:value-of select="."/>
+                </VARCHAR2>
+              </NR_FAX>
+            </xsl:for-each>
+            <ADRESY_EMAIL>
+              <xsl:for-each select="Email">
+                <VARCHAR2>
+                  <xsl:value-of select="."/>
+                </VARCHAR2>
+              </xsl:for-each>
+            </ADRESY_EMAIL>
+            <RegionID>080</RegionID>
+            <ProvinceID>450</ProvinceID>
+          </ADRES>
+          <ClassID>Detal</ClassID>
+          <Profile>Reseller</Profile>
+          <ContactPerson>Tomasz Wspaniały</ContactPerson>
+          <ChainID>123</ChainID>
+        </xsl:for-each>
+        <AdditionalData>
+          <SalesRepresentativeID>5235</SalesRepresentativeID>
+        </AdditionalData>
+        <PLATNIK_VAT>T</PLATNIK_VAT>
+        <BLOKADA_ZAKUPU>N</BLOKADA_ZAKUPU>
+        <RODZAJ_DATY_WAR_HANDL_FAKT>S</RODZAJ_DATY_WAR_HANDL_FAKT>
+        <RODZAJ_DATY_WAR_HANDL_ZAM>W</RODZAJ_DATY_WAR_HANDL_ZAM>
+        <RODZAJ_DATY_TERM_PLAT_FS>DW</RODZAJ_DATY_TERM_PLAT_FS>
+        <GRUPY_KONTRHENTA/>
+        <JEDNOSTKI_OSOBY/>
+      </xsl:for-each>
+    </PA_KONTRAHENT_TK>
+  </xsl:template>
+</xsl:stylesheet>';
+
+    INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'CUSTOMER_DATA',
+                 'SELECT osol.kod        id,
+                         osby.code       name,
+                         osol.aktualna   active,
+                         osol.first_name username,
+                         osol.surname    usersurname,
+                         CURSOR (SELECT konr.symbol customerid
+                                   FROM lg_osoby_log osol1,
+                                        (SELECT *
+                                           FROM lg_grupy_kontrahentow
+                                          START WITH id = 63
+                                        CONNECT BY PRIOR id = grkn_id) grko,
+                                        lg_kontrahenci_grup kngr,
+                                        ap_kontrahenci konr
+                                  WHERE     osol1.atrybut_t01 = grko.nazwa
+                                        AND grko.id = kngr.grkn_id
+                                        AND osol1.aktualna = ''T''
+                                        AND kngr.konr_id = konr.id
+                                        AND osol1.id = osol.id) customers
+                     FROM lg_osoby_log osol, pa_osoby osby
+                    WHERE     osol.atrybut_t01 IS NOT NULL
+                          AND osol.osby_id = osby.id
+                          AND osol.id IN (:p_id)',
+                 v_xslt,
+                 'OUT/new_customer',
+                 'T',
+                 'IN');
+                 
     INSERT INTO jg_sql_repository (id, object_type, sql_query, xslt, file_location, up_to_date, direction)
          VALUES (jg_sqre_seq.NEXTVAL,
                  'DELIVERY_METHODS',
