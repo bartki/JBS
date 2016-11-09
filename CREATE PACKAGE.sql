@@ -931,7 +931,7 @@ CREATE OR REPLACE PACKAGE jg_input_sync IS
 END;
 /
 
-CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
+PACKAGE BODY JG_INPUT_SYNC IS
 ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_query_from_sql_repository (
         p_object_type                   IN        jg_input_log.object_type%TYPE)
@@ -996,13 +996,13 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
     BEGIN
         r_current_format := Pa_Xmltype.biezacy_format;
         Pa_Xmltype.Ustaw_Format_XML ();
-        
+
         v_ctx := DBMS_XMLGEN.newcontext (querystring => p_sql_query);
         Dbms_Xmlgen.setrowsettag (v_ctx, NULL);
         Dbms_Xmlgen.setrowtag (v_ctx, p_object_type);
         v_xml := Dbms_Xmlgen.getxml (v_ctx);
         DBMS_XMLGEN.closecontext (v_ctx);
-        
+
         Pa_Xmltype.Ustaw_Format (r_current_format);
         RETURN v_xml;
     END;
@@ -1019,17 +1019,17 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
         r_current_format   pa_xmltype.tr_format;
         v_result           XMLTYPE;
     BEGIN
-        r_current_format := Pa_Xmltype.biezacy_format;        
+        r_current_format := Pa_Xmltype.biezacy_format;
         Pa_Xmltype.Ustaw_Format_XML();
-        
+
         IF v_xslt IS NULL
         THEN
             v_xslt := get_xslt_from_repository (p_object_type => p_object_type);
         END IF;
-        
+
         v_xml    := xmltype.createxml (p_xml);
         v_result := v_xml.transform (XMLTYPE(v_xslt));
-        
+
         Pa_Xmltype.Ustaw_Format (r_current_format);
         RETURN v_result;
     END;
@@ -1063,7 +1063,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
         apix_lg_konr.update_obj (p_konr                           => v_xml.getclobval,
                                  p_update_limit                   => FALSE,
                                  p_update_addresses_by_konr_mdf   => TRUE);
-                                 
+
         RETURN lg_konr_sql.id (p_symbol   => pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns));
     END;
 
@@ -1083,7 +1083,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
         v_wzrc_id           lg_documents_templates.id%TYPE;
     BEGIN
         Pa_Wass_Def.Ustaw (p_nazwa => 'IMPORT_INFINITE', p_wartosc => 'T');
-                               
+
         v_sql_query := get_query_from_sql_repository (p_object_type);
         v_sql_query := REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
 
@@ -1099,13 +1099,13 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
             p_data_faktury     => v_data_realizacji,
             p_data_sprzedazy   => v_data_realizacji,
             p_wzrc_id          => v_wzrc_id);
-        
+
         v_xml := XMLTYPE.APPENDCHILDXML (v_xml, 'LG_ZASP_T', XMLTYPE ('<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));
         Apix_Lg_Zasp.Aktualizuj (p_zamowienie => v_xml.getclobval);
         Lg_Dosp_Obe.Zakoncz;
 
         Pa_Wass_Def.Usun (p_nazwa => 'IMPORT_INFINITE');
-        
+
         RETURN lg_sord_sql.id_symbol (p_symbol => pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/SYMBOL_DOKUMENTU'));
     END;
 
@@ -1138,9 +1138,9 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
                                               AND zare.zrre_typ = ''ZASI''
                                               AND reze.zare_id(+) = zare.id
                                               AND sori.document_id = sord.id) reservations
-                          FROM lg_sal_orders sord          
+                          FROM lg_sal_orders sord
                          WHERE sord.id = ' || r_inlo.object_id;
-                
+
                 v_xslt := '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                            <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                            <xsl:strip-space elements="*"/>
@@ -1154,7 +1154,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
                             <RESERVATION><xsl:apply-templates /></RESERVATION>
                           </xsl:template>
                           </xsl:stylesheet>';
-                          
+
                 v_xml_clob := create_xml(v_sql_query, 'ORDER_RESPONSE');
                 v_xml      := transform_xml(v_xml_clob, 'ORDER_RESPONSE', v_xslt);
 
@@ -1164,7 +1164,8 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
                 UPDATE jg_input_log
                    SET xml_response = v_xml.getClobVal()
                  WHERE id = r_inlo.id;
-            ELSIF r_inlo.object_type = 'NEW_CONTRACTORS'
+            ELSIF     r_inlo.object_type = 'NEW_CONTRACTORS'
+                  OR  r_inlo.object_type = 'CUSTOMER_DATA'
             THEN
                 v_oryginal_id := NULL;
 
@@ -1182,8 +1183,8 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
                                        ''IMPORTED'' status
                                   FROM ap_kontrahenci konr
                                  WHERE konr.id = ' || r_inlo.object_id;
-                                            
-                v_xml_clob := create_xml(v_sql_query, 'CONTRACTOR_RESPONSE');                
+
+                v_xml_clob := create_xml(v_sql_query, 'CONTRACTOR_RESPONSE');
                 jg_output_sync.send_text_file_to_ftp (p_xml       => v_xml_clob,
                                                       p_file_name => '/IN/responses/Response_' || r_inlo.file_name);
 
@@ -1191,7 +1192,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
                    SET xml_response = v_xml_clob
                  WHERE id = r_inlo.id;
             END IF;
-            
+
         END LOOP;
     END;
 
@@ -1202,13 +1203,17 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
         v_object_id   jg_input_log.object_id%TYPE;
     BEGIN
         CASE pr_operation.object_type
-          
+
         WHEN 'NEW_CONTRACTORS'
         THEN
             v_object_id := import_customer (p_xml           => pr_operation.xml,
                                             p_object_type   => pr_operation.object_type);
+        WHEN 'CUSTOMER_DATA'
+        THEN
+            v_object_id := import_customer (p_xml           => pr_operation.xml,
+                                            p_object_type   => pr_operation.object_type);
         WHEN 'ORDER'
-        THEN                                   
+        THEN
             v_object_id := import_sale_order (p_operation_id   => pr_operation.id,
                                               p_object_type    => pr_operation.object_type);
         END CASE;
@@ -1253,11 +1258,17 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
 
                             v_object_type := r_sqre.object_type;
 
+                            IF     v_object_type = 'NEW_CONTRACTORS'
+                               AND INSTR (UPPER(v_file_list (v_i)), 'CUSTOMER_DATA') > 0
+                            THEN
+                                v_object_type := 'CUSTOMER_DATA';
+                            END IF;
+
                             IF INSTR (v_file_list (v_i), '.xml') > 0
                             THEN
                                 v_file := jg_ftp.get_remote_ascii_data (p_conn   => v_connection,
                                                                         p_file   => r_sqre.file_location || '/' || v_file_list (v_i));
-                                
+
                                 INSERT INTO jg_input_log (id, file_name, object_type, xml, on_time)
                                      VALUES (jg_inlo_seq.NEXTVAL,
                                              v_file_list (v_i),
@@ -1273,7 +1284,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
                         WHEN OTHERS
                         THEN
                             ROLLBACK TO process_file;
-                            
+
                             v_error := SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace;
 
                             INSERT INTO jg_input_log (id, file_name, object_type, xml, on_time, status, error)
@@ -1301,7 +1312,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
 
         FOR r_operation IN (SELECT *
                               FROM jg_input_log
-                             WHERE     status = 'READY' 
+                             WHERE     status = 'READY'
                                    AND on_time = 'T')
         LOOP
             SAVEPOINT operation;
@@ -1337,7 +1348,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
             WHEN OTHERS
             THEN
                 ROLLBACK TO operation;
-                    
+
                 save_result (
                     p_inlo_id     => r_operation.id,
                     p_status      => 'ERROR',
@@ -1348,7 +1359,7 @@ CREATE OR REPLACE PACKAGE BODY JG_INPUT_SYNC IS
 
         send_response;
     END;
-    
+
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
