@@ -1256,7 +1256,7 @@ IS
                     v_sql_query :=
                            'SELECT sord.doc_symbol_rcv order_number,
                                ''ESTABLISHED''     status,
-                               CURSOR (SELECT zare.data_modyfikacji             reservation_date,
+                               CURSOR (SELECT to_char(zare.data_modyfikacji,''YYYY/MM/DD HH24:MI:SS'')  reservation_date,
                                               sori.item_symbol                  commodity_id,
                                               sori.quantity                     quantity_ordered,
                                               NVL(reze.ilosc_zarezerwowana, 0)  quantity_reserved
