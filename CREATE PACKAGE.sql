@@ -159,83 +159,107 @@ CREATE OR REPLACE PACKAGE jg_ftp AS
 END;
 /
 
-CREATE OR REPLACE PACKAGE BODY jg_ftp AS
-------------------------------------------------------------------------------------------------------------------------
-    g_reply                         t_string_table := t_string_table ();
-    g_binary                        BOOLEAN := TRUE;
-    g_debug                         BOOLEAN := TRUE;
-    g_convert_crlf                  BOOLEAN := TRUE;
+CREATE OR REPLACE PACKAGE BODY jg_ftp
+AS
+    ------------------------------------------------------------------------------------------------------------------------
+    g_reply          t_string_table := t_string_table ();
+    g_binary         BOOLEAN := TRUE;
+    g_debug          BOOLEAN := TRUE;
+    g_convert_crlf   BOOLEAN := TRUE;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE DEBUG (
-        p_text                          IN      VARCHAR2);
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE debug (p_text IN VARCHAR2);
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION login (
-        p_host                          IN      VARCHAR2,
-        p_port                          IN      VARCHAR2,
-        p_user                          IN      VARCHAR2,
-        p_pass                          IN      VARCHAR2,
-        p_timeout                       IN      NUMBER := NULL)
-        RETURN UTL_TCP.connection IS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION login (p_host      IN VARCHAR2,
+                    p_port      IN VARCHAR2,
+                    p_user      IN VARCHAR2,
+                    p_pass      IN VARCHAR2,
+                    p_timeout   IN NUMBER := NULL)
+        RETURN UTL_TCP.connection
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn   UTL_TCP.connection;
     BEGIN
-        g_reply.DELETE;
-        l_conn  := UTL_TCP.open_connection (p_host, p_port, tx_timeout => p_timeout);
+        g_reply.delete;
+        l_conn :=
+            UTL_TCP.open_connection (p_host, p_port, tx_timeout => p_timeout);
         get_reply (l_conn);
         send_command (l_conn, 'USER ' || p_user);
         send_command (l_conn, 'PASS ' || p_pass);
         RETURN l_conn;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION get_passive (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection)
-        RETURN UTL_TCP.connection IS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_reply                         VARCHAR2 (32767);
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION get_passive (p_conn IN OUT NOCOPY UTL_TCP.connection)
+        RETURN UTL_TCP.connection
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn    UTL_TCP.connection;
+        l_reply   VARCHAR2 (32767);
         --l_host    VARCHAR(100);
-        l_port1                         NUMBER (10);
-        l_port2                         NUMBER (10);
+        l_port1   NUMBER (10);
+        l_port2   NUMBER (10);
     BEGIN
         send_command (p_conn, 'PASV');
-        l_reply  := g_reply (g_reply.LAST);
-        l_reply  :=
-            REPLACE (SUBSTR (l_reply, INSTR (l_reply, '(') + 1, (INSTR (l_reply, ')')) - (INSTR (l_reply, '(')) - 1),
-                     ',',
-                     '.');
+        l_reply := g_reply (g_reply.LAST);
+        l_reply :=
+            REPLACE (
+                SUBSTR (l_reply,
+                        INSTR (l_reply, '(') + 1,
+                        (INSTR (l_reply, ')')) - (INSTR (l_reply, '(')) - 1),
+                ',',
+                '.');
         --l_host  := SUBSTR(l_reply, 1, INSTR(l_reply, '.', 1, 4)-1);
-        l_port1  :=
+        l_port1 :=
             TO_NUMBER (SUBSTR (l_reply,
-                               INSTR (l_reply, '.', 1, 4) + 1,
-                               (INSTR (l_reply, '.', 1, 5) - 1) - (INSTR (l_reply, '.', 1, 4))));
-        l_port2  := TO_NUMBER (SUBSTR (l_reply, INSTR (l_reply, '.', 1, 5) + 1));
+                                 INSTR (l_reply,
+                                        '.',
+                                        1,
+                                        4)
+                               + 1,
+                                 (  INSTR (l_reply,
+                                           '.',
+                                           1,
+                                           5)
+                                  - 1)
+                               - (INSTR (l_reply,
+                                         '.',
+                                         1,
+                                         4))));
+        l_port2 :=
+            TO_NUMBER (SUBSTR (l_reply,
+                                 INSTR (l_reply,
+                                        '.',
+                                        1,
+                                        5)
+                               + 1));
         --l_conn := utl_tcp.open_connection(l_host, 256 * l_port1 + l_port2);
-        l_conn   := UTL_TCP.open_connection (p_conn.remote_host, 256 * l_port1 + l_port2);
+        l_conn :=
+            UTL_TCP.open_connection (p_conn.remote_host,
+                                     256 * l_port1 + l_port2);
         RETURN l_conn;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE LOGOUT (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_reply                         IN      BOOLEAN := TRUE) AS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE LOGOUT (p_conn    IN OUT NOCOPY UTL_TCP.connection,
+                      p_reply   IN            BOOLEAN := TRUE)
+    AS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         send_command (p_conn, 'QUIT', p_reply);
         UTL_TCP.close_connection (p_conn);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE send_command (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_command                       IN      VARCHAR2,
-        p_reply                         IN      BOOLEAN := TRUE) IS
-------------------------------------------------------------------------------------------------------------------------
-        l_result                        PLS_INTEGER;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_command (p_conn      IN OUT NOCOPY UTL_TCP.connection,
+                            p_command   IN            VARCHAR2,
+                            p_reply     IN            BOOLEAN := TRUE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_result   PLS_INTEGER;
     BEGIN
-        l_result  := UTL_TCP.write_line (p_conn, p_command);
+        l_result := UTL_TCP.write_line (p_conn, p_command);
 
         -- If you get ORA-29260 after the PASV call, replace the above line with the following line.
         -- l_result := UTL_TCP.write_text(p_conn, p_command || utl_tcp.crlf, length(p_command || utl_tcp.crlf));
@@ -245,25 +269,25 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
         END IF;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE get_reply (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection) IS
-------------------------------------------------------------------------------------------------------------------------
-        l_reply_code                    VARCHAR2 (3) := NULL;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE get_reply (p_conn IN OUT NOCOPY UTL_TCP.connection)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_reply_code   VARCHAR2 (3) := NULL;
     BEGIN
         LOOP
             g_reply.EXTEND;
-            g_reply (g_reply.LAST)  := UTL_TCP.get_line (p_conn, TRUE);
-            DEBUG (g_reply (g_reply.LAST));
+            g_reply (g_reply.LAST) := UTL_TCP.get_line (p_conn, TRUE);
+            debug (g_reply (g_reply.LAST));
 
             IF l_reply_code IS NULL
             THEN
-                l_reply_code  := SUBSTR (g_reply (g_reply.LAST), 1, 3);
+                l_reply_code := SUBSTR (g_reply (g_reply.LAST), 1, 3);
             END IF;
 
             IF SUBSTR (l_reply_code, 1, 1) IN ('4', '5')
             THEN
-                Raise_Application_Error (-20000, g_reply (g_reply.LAST));
+                raise_application_error (-20000, g_reply (g_reply.LAST));
             ELSIF (    SUBSTR (g_reply (g_reply.LAST), 1, 3) = l_reply_code
                    AND SUBSTR (g_reply (g_reply.LAST), 4, 1) = ' ')
             THEN
@@ -276,69 +300,78 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             NULL;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION get_local_ascii_data (
-        p_dir                           IN      VARCHAR2,
-        p_file                          IN      VARCHAR2)
-        RETURN CLOB IS
-------------------------------------------------------------------------------------------------------------------------
-        l_bfile                         BFILE;
-        l_data                          CLOB;
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION get_local_ascii_data (p_dir IN VARCHAR2, p_file IN VARCHAR2)
+        RETURN CLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_bfile   BFILE;
+        l_data    CLOB;
     BEGIN
-        DBMS_LOB.createtemporary (lob_loc => l_data, CACHE => TRUE, dur => DBMS_LOB.CALL);
-        l_bfile  := BFILENAME (p_dir, p_file);
+        DBMS_LOB.createtemporary (lob_loc   => l_data,
+                                  cache     => TRUE,
+                                  dur       => DBMS_LOB.call);
+        l_bfile := BFILENAME (p_dir, p_file);
         DBMS_LOB.fileopen (l_bfile, DBMS_LOB.file_readonly);
 
         IF DBMS_LOB.getlength (l_bfile) > 0
         THEN
-            DBMS_LOB.loadfromfile (l_data, l_bfile, DBMS_LOB.getlength (l_bfile));
+            DBMS_LOB.loadfromfile (l_data,
+                                   l_bfile,
+                                   DBMS_LOB.getlength (l_bfile));
         END IF;
 
         DBMS_LOB.fileclose (l_bfile);
         RETURN l_data;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION get_local_binary_data (
-        p_dir                           IN      VARCHAR2,
-        p_file                          IN      VARCHAR2)
-        RETURN BLOB IS
-------------------------------------------------------------------------------------------------------------------------
-        l_bfile                         BFILE;
-        l_data                          BLOB;
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION get_local_binary_data (p_dir IN VARCHAR2, p_file IN VARCHAR2)
+        RETURN BLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_bfile   BFILE;
+        l_data    BLOB;
     BEGIN
-        DBMS_LOB.createtemporary (lob_loc => l_data, CACHE => TRUE, dur => DBMS_LOB.CALL);
-        l_bfile  := BFILENAME (p_dir, p_file);
+        DBMS_LOB.createtemporary (lob_loc   => l_data,
+                                  cache     => TRUE,
+                                  dur       => DBMS_LOB.call);
+        l_bfile := BFILENAME (p_dir, p_file);
         DBMS_LOB.fileopen (l_bfile, DBMS_LOB.file_readonly);
 
         IF DBMS_LOB.getlength (l_bfile) > 0
         THEN
-            DBMS_LOB.loadfromfile (l_data, l_bfile, DBMS_LOB.getlength (l_bfile));
+            DBMS_LOB.loadfromfile (l_data,
+                                   l_bfile,
+                                   DBMS_LOB.getlength (l_bfile));
         END IF;
 
         DBMS_LOB.fileclose (l_bfile);
         RETURN l_data;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_remote_ascii_data (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_file                          IN      VARCHAR2)
-        RETURN CLOB IS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_amount                        PLS_INTEGER;
-        l_buffer                        VARCHAR2 (32767);
-        l_data                          CLOB;
+        p_conn   IN OUT NOCOPY UTL_TCP.connection,
+        p_file   IN            VARCHAR2)
+        RETURN CLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn     UTL_TCP.connection;
+        l_amount   PLS_INTEGER;
+        l_buffer   VARCHAR2 (32767);
+        l_data     CLOB;
     BEGIN
-        DBMS_LOB.createtemporary (lob_loc => l_data, CACHE => TRUE, dur => DBMS_LOB.CALL);
-        l_conn  := get_passive (p_conn);
+        DBMS_LOB.createtemporary (lob_loc   => l_data,
+                                  cache     => TRUE,
+                                  dur       => DBMS_LOB.call);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'TYPE A', TRUE);
         send_command (p_conn, 'RETR ' || p_file, TRUE);
 
         BEGIN
             LOOP
-                l_amount  := UTL_TCP.read_text(l_conn, l_buffer, 32767);
+                l_amount := UTL_TCP.read_text (l_conn, l_buffer, 32767);
                 DBMS_LOB.writeappend (l_data, l_amount, l_buffer);
             END LOOP;
         EXCEPTION
@@ -360,25 +393,28 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             RAISE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_remote_binary_data (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_file                          IN      VARCHAR2)
-        RETURN BLOB IS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_amount                        PLS_INTEGER;
-        l_buffer                        RAW (32767);
-        l_data                          BLOB;
+        p_conn   IN OUT NOCOPY UTL_TCP.connection,
+        p_file   IN            VARCHAR2)
+        RETURN BLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn     UTL_TCP.connection;
+        l_amount   PLS_INTEGER;
+        l_buffer   RAW (32767);
+        l_data     BLOB;
     BEGIN
-        DBMS_LOB.createtemporary (lob_loc => l_data, CACHE => TRUE, dur => DBMS_LOB.CALL);
-        l_conn  := get_passive (p_conn);
+        DBMS_LOB.createtemporary (lob_loc   => l_data,
+                                  cache     => TRUE,
+                                  dur       => DBMS_LOB.call);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'RETR ' || p_file, TRUE);
 
         BEGIN
             LOOP
-                l_amount  := UTL_TCP.read_raw (l_conn, l_buffer, 32767);
-                DBMS_LOB.writeappend(l_data, l_amount, l_buffer);
+                l_amount := UTL_TCP.read_raw (l_conn, l_buffer, 32767);
+                DBMS_LOB.writeappend (l_data, l_amount, l_buffer);
             END LOOP;
         EXCEPTION
             WHEN UTL_TCP.end_of_input
@@ -399,33 +435,40 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             RAISE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE put_local_ascii_data (
-        p_data                          IN      CLOB,
-        p_dir                           IN      VARCHAR2,
-        p_file                          IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
-        l_out_file                      UTL_FILE.file_type;
-        l_buffer                        VARCHAR2 (32767);
-        l_amount                        BINARY_INTEGER := 32767;
-        l_pos                           INTEGER := 1;
-        l_clob_len                      INTEGER;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE put_local_ascii_data (p_data   IN CLOB,
+                                    p_dir    IN VARCHAR2,
+                                    p_file   IN VARCHAR2)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_out_file   UTL_FILE.file_type;
+        l_buffer     VARCHAR2 (32767);
+        l_amount     BINARY_INTEGER := 32767;
+        l_pos        INTEGER := 1;
+        l_clob_len   INTEGER;
     BEGIN
-        l_clob_len  := DBMS_LOB.getlength (p_data);
-        l_out_file  := UTL_FILE.fopen (p_dir, p_file, 'w', 32767);
+        l_clob_len := DBMS_LOB.getlength (p_data);
+        l_out_file :=
+            UTL_FILE.fopen (p_dir,
+                            p_file,
+                            'w',
+                            32767);
 
         WHILE l_pos <= l_clob_len
         LOOP
-            DBMS_LOB.READ (p_data, l_amount, l_pos, l_buffer);
+            DBMS_LOB.read (p_data,
+                           l_amount,
+                           l_pos,
+                           l_buffer);
 
             IF g_convert_crlf
             THEN
-                l_buffer  := REPLACE (l_buffer, CHR (13), NULL);
+                l_buffer := REPLACE (l_buffer, CHR (13), NULL);
             END IF;
 
             UTL_FILE.put (l_out_file, l_buffer);
             UTL_FILE.fflush (l_out_file);
-            l_pos  := l_pos + l_amount;
+            l_pos := l_pos + l_amount;
         END LOOP;
 
         UTL_FILE.fclose (l_out_file);
@@ -440,27 +483,34 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             RAISE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE put_local_binary_data (
-        p_data                          IN      BLOB,
-        p_dir                           IN      VARCHAR2,
-        p_file                          IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
-        l_out_file                      UTL_FILE.file_type;
-        l_buffer                        RAW (32767);
-        l_amount                        BINARY_INTEGER := 32767;
-        l_pos                           INTEGER := 1;
-        l_blob_len                      INTEGER;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE put_local_binary_data (p_data   IN BLOB,
+                                     p_dir    IN VARCHAR2,
+                                     p_file   IN VARCHAR2)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_out_file   UTL_FILE.file_type;
+        l_buffer     RAW (32767);
+        l_amount     BINARY_INTEGER := 32767;
+        l_pos        INTEGER := 1;
+        l_blob_len   INTEGER;
     BEGIN
-        l_blob_len  := DBMS_LOB.getlength (p_data);
-        l_out_file  := UTL_FILE.fopen (p_dir, p_file, 'wb', 32767);
+        l_blob_len := DBMS_LOB.getlength (p_data);
+        l_out_file :=
+            UTL_FILE.fopen (p_dir,
+                            p_file,
+                            'wb',
+                            32767);
 
         WHILE l_pos <= l_blob_len
         LOOP
-            DBMS_LOB.READ (p_data, l_amount, l_pos, l_buffer);
+            DBMS_LOB.read (p_data,
+                           l_amount,
+                           l_pos,
+                           l_buffer);
             UTL_FILE.put_raw (l_out_file, l_buffer, TRUE);
             UTL_FILE.fflush (l_out_file);
-            l_pos  := l_pos + l_amount;
+            l_pos := l_pos + l_amount;
         END LOOP;
 
         UTL_FILE.fclose (l_out_file);
@@ -475,38 +525,43 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             RAISE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE put_remote_ascii_data (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_file                          IN      VARCHAR2,
-        p_data                          IN      CLOB) IS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_result                        PLS_INTEGER;
-        l_buffer                        VARCHAR2 (32767);
-        l_amount                        BINARY_INTEGER := 32767;
-                                                -- Switch to 10000 (or use binary) if you get ORA-06502 from this line.
-        l_pos                           INTEGER := 1;
-        l_clob_len                      INTEGER;
+        p_conn   IN OUT NOCOPY UTL_TCP.connection,
+        p_file   IN            VARCHAR2,
+        p_data   IN            CLOB)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn       UTL_TCP.connection;
+        l_result     PLS_INTEGER;
+        l_buffer     VARCHAR2 (32767);
+        l_amount     BINARY_INTEGER := 32767;
+        -- Switch to 10000 (or use binary) if you get ORA-06502 from this line.
+        l_pos        INTEGER := 1;
+        l_clob_len   INTEGER;
     BEGIN
-        l_conn      := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
 
         send_command (p_conn, 'TYPE A', TRUE);
         send_command (p_conn, 'STOR ' || p_file, TRUE);
-        l_clob_len  := DBMS_LOB.getlength (p_data);
+        l_clob_len := DBMS_LOB.getlength (p_data);
 
         WHILE l_pos <= l_clob_len
         LOOP
-            DBMS_LOB.READ (p_data, l_amount, l_pos, l_buffer);
+            DBMS_LOB.read (p_data,
+                           l_amount,
+                           l_pos,
+                           l_buffer);
 
             IF g_convert_crlf
             THEN
-                l_buffer  := REPLACE (l_buffer, CHR (13), NULL);
+                l_buffer := REPLACE (l_buffer, CHR (13), NULL);
             END IF;
 
-            l_result  := UTL_TCP.write_text (l_conn, l_buffer, LENGTH (l_buffer));
-            UTL_TCP.FLUSH (l_conn);
-            l_pos     := l_pos + l_amount;
+            l_result :=
+                UTL_TCP.write_text (l_conn, l_buffer, LENGTH (l_buffer));
+            UTL_TCP.flush (l_conn);
+            l_pos := l_pos + l_amount;
         END LOOP;
 
         UTL_TCP.close_connection (l_conn);
@@ -520,32 +575,36 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             RAISE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE put_remote_binary_data (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_file                          IN      VARCHAR2,
-        p_data                          IN      BLOB) IS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_result                        PLS_INTEGER;
-        l_buffer                        RAW (32767);
-        l_amount                        BINARY_INTEGER := 32767;
-        l_pos                           INTEGER := 1;
-        l_blob_len                      INTEGER;
+        p_conn   IN OUT NOCOPY UTL_TCP.connection,
+        p_file   IN            VARCHAR2,
+        p_data   IN            BLOB)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn       UTL_TCP.connection;
+        l_result     PLS_INTEGER;
+        l_buffer     RAW (32767);
+        l_amount     BINARY_INTEGER := 32767;
+        l_pos        INTEGER := 1;
+        l_blob_len   INTEGER;
     BEGIN
         l_conn := get_passive (p_conn);
 
         --setting binary type
         send_command (p_conn, 'TYPE I', TRUE);
         send_command (p_conn, 'STOR ' || p_file, TRUE);
-        l_blob_len  := DBMS_LOB.getlength (p_data);
+        l_blob_len := DBMS_LOB.getlength (p_data);
 
         WHILE l_pos <= l_blob_len
         LOOP
-            DBMS_LOB.READ (p_data, l_amount, l_pos, l_buffer);
-            l_result  := UTL_TCP.write_raw (l_conn, l_buffer, l_amount);
-            UTL_TCP.FLUSH (l_conn);
-            l_pos     := l_pos + l_amount;
+            DBMS_LOB.read (p_data,
+                           l_amount,
+                           l_pos,
+                           l_buffer);
+            l_result := UTL_TCP.write_raw (l_conn, l_buffer, l_amount);
+            UTL_TCP.flush (l_conn);
+            l_pos := l_pos + l_amount;
         END LOOP;
 
         UTL_TCP.close_connection (l_conn);
@@ -559,83 +618,95 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             RAISE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE get (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_from_file                     IN      VARCHAR2,
-        p_to_dir                        IN      VARCHAR2,
-        p_to_file                       IN      VARCHAR2) AS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE get (p_conn        IN OUT NOCOPY UTL_TCP.connection,
+                   p_from_file   IN            VARCHAR2,
+                   p_to_dir      IN            VARCHAR2,
+                   p_to_file     IN            VARCHAR2)
+    AS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         IF g_binary
         THEN
-            put_local_binary_data (p_data     => get_remote_binary_data (p_conn, p_from_file),
-                                   p_dir      => p_to_dir,
-                                   p_file     => p_to_file);
+            put_local_binary_data (
+                p_data   => get_remote_binary_data (p_conn, p_from_file),
+                p_dir    => p_to_dir,
+                p_file   => p_to_file);
         ELSE
-            put_local_ascii_data (p_data     => get_remote_ascii_data (p_conn, p_from_file),
-                                  p_dir      => p_to_dir,
-                                  p_file     => p_to_file);
+            put_local_ascii_data (
+                p_data   => get_remote_ascii_data (p_conn, p_from_file),
+                p_dir    => p_to_dir,
+                p_file   => p_to_file);
         END IF;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE put (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_from_dir                      IN      VARCHAR2,
-        p_from_file                     IN      VARCHAR2,
-        p_to_file                       IN      VARCHAR2) AS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE put (p_conn        IN OUT NOCOPY UTL_TCP.connection,
+                   p_from_dir    IN            VARCHAR2,
+                   p_from_file   IN            VARCHAR2,
+                   p_to_file     IN            VARCHAR2)
+    AS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         IF g_binary
         THEN
-            put_remote_binary_data (p_conn     => p_conn,
-                                    p_file     => p_to_file,
-                                    p_data     => get_local_binary_data (p_from_dir, p_from_file));
+            put_remote_binary_data (
+                p_conn   => p_conn,
+                p_file   => p_to_file,
+                p_data   => get_local_binary_data (p_from_dir, p_from_file));
         ELSE
-            put_remote_ascii_data (p_conn     => p_conn,
-                                   p_file     => p_to_file,
-                                   p_data     => get_local_ascii_data (p_from_dir, p_from_file));
+            put_remote_ascii_data (
+                p_conn   => p_conn,
+                p_file   => p_to_file,
+                p_data   => get_local_ascii_data (p_from_dir, p_from_file));
         END IF;
 
         get_reply (p_conn);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE get_direct (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_from_file                     IN      VARCHAR2,
-        p_to_dir                        IN      VARCHAR2,
-        p_to_file                       IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_out_file                      UTL_FILE.file_type;
-        l_amount                        PLS_INTEGER;
-        l_buffer                        VARCHAR2 (32767);
-        l_raw_buffer                    RAW (32767);
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE get_direct (p_conn        IN OUT NOCOPY UTL_TCP.connection,
+                          p_from_file   IN            VARCHAR2,
+                          p_to_dir      IN            VARCHAR2,
+                          p_to_file     IN            VARCHAR2)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn         UTL_TCP.connection;
+        l_out_file     UTL_FILE.file_type;
+        l_amount       PLS_INTEGER;
+        l_buffer       VARCHAR2 (32767);
+        l_raw_buffer   RAW (32767);
     BEGIN
-        l_conn  := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'RETR ' || p_from_file, TRUE);
 
         IF g_binary
         THEN
-            l_out_file  := UTL_FILE.fopen (p_to_dir, p_to_file, 'wb', 32767);
+            l_out_file :=
+                UTL_FILE.fopen (p_to_dir,
+                                p_to_file,
+                                'wb',
+                                32767);
         ELSE
-            l_out_file  := UTL_FILE.fopen (p_to_dir, p_to_file, 'w', 32767);
+            l_out_file :=
+                UTL_FILE.fopen (p_to_dir,
+                                p_to_file,
+                                'w',
+                                32767);
         END IF;
 
         BEGIN
             LOOP
                 IF g_binary
                 THEN
-                    l_amount  := UTL_TCP.read_raw (l_conn, l_raw_buffer, 32767);
+                    l_amount := UTL_TCP.read_raw (l_conn, l_raw_buffer, 32767);
                     UTL_FILE.put_raw (l_out_file, l_raw_buffer, TRUE);
                 ELSE
-                    l_amount  := UTL_TCP.read_text (l_conn, l_buffer, 32767);
+                    l_amount := UTL_TCP.read_text (l_conn, l_buffer, 32767);
 
                     IF g_convert_crlf
                     THEN
-                        l_buffer  := REPLACE (l_buffer, CHR (13), NULL);
+                        l_buffer := REPLACE (l_buffer, CHR (13), NULL);
                     END IF;
 
                     UTL_FILE.put (l_out_file, l_buffer);
@@ -665,39 +736,42 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             RAISE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE put_direct (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_from_dir                      IN      VARCHAR2,
-        p_from_file                     IN      VARCHAR2,
-        p_to_file                       IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_bfile                         BFILE;
-        l_result                        PLS_INTEGER;
-        l_amount                        PLS_INTEGER := 32767;
-        l_raw_buffer                    RAW (32767);
-        l_len                           NUMBER;
-        l_pos                           NUMBER := 1;
-        ex_ascii                        EXCEPTION;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE put_direct (p_conn        IN OUT NOCOPY UTL_TCP.connection,
+                          p_from_dir    IN            VARCHAR2,
+                          p_from_file   IN            VARCHAR2,
+                          p_to_file     IN            VARCHAR2)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn         UTL_TCP.connection;
+        l_bfile        BFILE;
+        l_result       PLS_INTEGER;
+        l_amount       PLS_INTEGER := 32767;
+        l_raw_buffer   RAW (32767);
+        l_len          NUMBER;
+        l_pos          NUMBER := 1;
+        ex_ascii       EXCEPTION;
     BEGIN
         IF NOT g_binary
         THEN
             RAISE ex_ascii;
         END IF;
 
-        l_conn   := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'STOR ' || p_to_file, TRUE);
-        l_bfile  := BFILENAME (p_from_dir, p_from_file);
+        l_bfile := BFILENAME (p_from_dir, p_from_file);
         DBMS_LOB.fileopen (l_bfile, DBMS_LOB.file_readonly);
-        l_len    := DBMS_LOB.getlength (l_bfile);
+        l_len := DBMS_LOB.getlength (l_bfile);
 
         WHILE l_pos <= l_len
         LOOP
-            DBMS_LOB.READ (l_bfile, l_amount, l_pos, l_raw_buffer);
-            DEBUG (l_amount);
-            l_result  := UTL_TCP.write_raw (l_conn, l_raw_buffer, l_amount);
-            l_pos     := l_pos + l_amount;
+            DBMS_LOB.read (l_bfile,
+                           l_amount,
+                           l_pos,
+                           l_raw_buffer);
+            debug (l_amount);
+            l_result := UTL_TCP.write_raw (l_conn, l_raw_buffer, l_amount);
+            l_pos := l_pos + l_amount;
         END LOOP;
 
         DBMS_LOB.fileclose (l_bfile);
@@ -705,7 +779,9 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
     EXCEPTION
         WHEN ex_ascii
         THEN
-            Raise_Application_Error (-20000, 'PUT_DIRECT not available in ASCII mode.');
+            raise_application_error (
+                -20000,
+                'PUT_DIRECT not available in ASCII mode.');
         WHEN OTHERS
         THEN
             IF DBMS_LOB.fileisopen (l_bfile) = 1
@@ -716,61 +792,62 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
             RAISE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE HELP (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection) AS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE HELP (p_conn IN OUT NOCOPY UTL_TCP.connection)
+    AS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         send_command (p_conn, 'HELP', TRUE);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE ASCII (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection) AS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE ASCII (p_conn IN OUT NOCOPY UTL_TCP.connection)
+    AS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         send_command (p_conn, 'TYPE A', TRUE);
-        g_binary  := FALSE;
+        g_binary := FALSE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE BINARY (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection) AS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE binary (p_conn IN OUT NOCOPY UTL_TCP.connection)
+    AS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         send_command (p_conn, 'TYPE I', TRUE);
-        g_binary  := TRUE;
+        g_binary := TRUE;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE LIST (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_dir                           IN      VARCHAR2,
-        p_list                          OUT     t_string_table) AS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_list                          t_string_table := t_string_table ();
-        l_reply_code                    VARCHAR2 (3) := NULL;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE list (p_conn   IN OUT NOCOPY UTL_TCP.connection,
+                    p_dir    IN            VARCHAR2,
+                    p_list      OUT        t_string_table)
+    AS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn         UTL_TCP.connection;
+        l_list         t_string_table := t_string_table ();
+        l_reply_code   VARCHAR2 (3) := NULL;
     BEGIN
-        l_conn  := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'LIST ' || p_dir, TRUE);
 
         BEGIN
             LOOP
                 l_list.EXTEND;
-                l_list (l_list.LAST)  := UTL_TCP.get_line (l_conn, TRUE);
-                DEBUG (l_list (l_list.LAST));
+                l_list (l_list.LAST) := UTL_TCP.get_line (l_conn, TRUE);
+                debug (l_list (l_list.LAST));
 
                 IF l_reply_code IS NULL
                 THEN
-                    l_reply_code  := SUBSTR (l_list (l_list.LAST), 1, 3);
+                    l_reply_code := SUBSTR (l_list (l_list.LAST), 1, 3);
                 END IF;
 
                 IF (    SUBSTR (l_reply_code, 1, 1) IN ('4', '5')
                     AND SUBSTR (l_reply_code, 4, 1) = ' ')
                 THEN
-                    Raise_Application_Error (-20000, l_list (l_list.LAST));
-                ELSIF (    SUBSTR (g_reply (g_reply.LAST), 1, 3) = l_reply_code
+                    raise_application_error (-20000, l_list (l_list.LAST));
+                ELSIF (    SUBSTR (g_reply (g_reply.LAST), 1, 3) =
+                               l_reply_code
                        AND SUBSTR (g_reply (g_reply.LAST), 4, 1) = ' ')
                 THEN
                     EXIT;
@@ -782,41 +859,42 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
                 NULL;
         END;
 
-        l_list.DELETE (l_list.LAST);
-        p_list  := l_list;
+        l_list.delete (l_list.LAST);
+        p_list := l_list;
         UTL_TCP.close_connection (l_conn);
         get_reply (p_conn);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE nlst (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_dir                           IN      VARCHAR2,
-        p_list                          OUT     t_string_table) AS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
-        l_list                          t_string_table := t_string_table ();
-        l_reply_code                    VARCHAR2 (3) := NULL;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE nlst (p_conn   IN OUT NOCOPY UTL_TCP.connection,
+                    p_dir    IN            VARCHAR2,
+                    p_list      OUT        t_string_table)
+    AS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn         UTL_TCP.connection;
+        l_list         t_string_table := t_string_table ();
+        l_reply_code   VARCHAR2 (3) := NULL;
     BEGIN
-        l_conn  := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'NLST ' || p_dir, TRUE);
 
         BEGIN
             LOOP
                 l_list.EXTEND;
-                l_list (l_list.LAST)  := UTL_TCP.get_line (l_conn, TRUE);
-                DEBUG (l_list (l_list.LAST));
+                l_list (l_list.LAST) := UTL_TCP.get_line (l_conn, TRUE);
+                debug (l_list (l_list.LAST));
 
                 IF l_reply_code IS NULL
                 THEN
-                    l_reply_code  := SUBSTR (l_list (l_list.LAST), 1, 3);
+                    l_reply_code := SUBSTR (l_list (l_list.LAST), 1, 3);
                 END IF;
 
                 IF (    SUBSTR (l_reply_code, 1, 1) IN ('4', '5')
                     AND SUBSTR (l_reply_code, 4, 1) = ' ')
                 THEN
-                    Raise_Application_Error (-20000, l_list (l_list.LAST));
-                ELSIF (    SUBSTR (g_reply (g_reply.LAST), 1, 3) = l_reply_code
+                    raise_application_error (-20000, l_list (l_list.LAST));
+                ELSIF (    SUBSTR (g_reply (g_reply.LAST), 1, 3) =
+                               l_reply_code
                        AND SUBSTR (g_reply (g_reply.LAST), 4, 1) = ' ')
                 THEN
                     EXIT;
@@ -828,74 +906,74 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
                 NULL;
         END;
 
-        l_list.DELETE (l_list.LAST);
-        p_list  := l_list;
+        l_list.delete (l_list.LAST);
+        p_list := l_list;
         UTL_TCP.close_connection (l_conn);
         get_reply (p_conn);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE RENAME (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_from                          IN      VARCHAR2,
-        p_to                            IN      VARCHAR2) AS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE rename (p_conn   IN OUT NOCOPY UTL_TCP.connection,
+                      p_from   IN            VARCHAR2,
+                      p_to     IN            VARCHAR2)
+    AS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn   UTL_TCP.connection;
     BEGIN
-        l_conn  := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'RNFR ' || p_from, TRUE);
         send_command (p_conn, 'RNTO ' || p_to, TRUE);
         LOGOUT (l_conn, FALSE);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE DELETE (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_file                          IN      VARCHAR2) AS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE delete (p_conn   IN OUT NOCOPY UTL_TCP.connection,
+                      p_file   IN            VARCHAR2)
+    AS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn   UTL_TCP.connection;
     BEGIN
-        l_conn  := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'DELE ' || p_file, TRUE);
         LOGOUT (l_conn, FALSE);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE mkdir (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_dir                           IN      VARCHAR2) AS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE mkdir (p_conn   IN OUT NOCOPY UTL_TCP.connection,
+                     p_dir    IN            VARCHAR2)
+    AS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn   UTL_TCP.connection;
     BEGIN
-        l_conn  := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'MKD ' || p_dir, TRUE);
         LOGOUT (l_conn, FALSE);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE rmdir (
-        p_conn                          IN OUT NOCOPY UTL_TCP.connection,
-        p_dir                           IN      VARCHAR2) AS
-------------------------------------------------------------------------------------------------------------------------
-        l_conn                          UTL_TCP.connection;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE rmdir (p_conn   IN OUT NOCOPY UTL_TCP.connection,
+                     p_dir    IN            VARCHAR2)
+    AS
+        ------------------------------------------------------------------------------------------------------------------------
+        l_conn   UTL_TCP.connection;
     BEGIN
-        l_conn  := get_passive (p_conn);
+        l_conn := get_passive (p_conn);
         send_command (p_conn, 'RMD ' || p_dir, TRUE);
         LOGOUT (l_conn, FALSE);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE convert_crlf (
-        p_status                        IN      BOOLEAN) AS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE convert_crlf (p_status IN BOOLEAN)
+    AS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
-        g_convert_crlf  := p_status;
+        g_convert_crlf := p_status;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE DEBUG (
-        p_text                          IN      VARCHAR2) IS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE debug (p_text IN VARCHAR2)
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         IF g_debug
         THEN
@@ -905,6 +983,7 @@ CREATE OR REPLACE PACKAGE BODY jg_ftp AS
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
+
 CREATE OR REPLACE PACKAGE JG_FTP_CONFIGURATION IS
 ------------------------------------------------------------------------------------------------------------------------
   
@@ -931,116 +1010,133 @@ CREATE OR REPLACE PACKAGE jg_input_sync IS
 END;
 /
 
-PACKAGE BODY JG_INPUT_SYNC IS
-------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE PACKAGE BODY jg_input_sync
+IS
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_query_from_sql_repository (
-        p_object_type                   IN        jg_input_log.object_type%TYPE)
-        RETURN jg_sql_repository.sql_query%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
+        p_object_type   IN jg_input_log.object_type%TYPE)
+        RETURN jg_sql_repository.sql_query%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         CURSOR c_sql_query (
-            pc_object_type              jg_sql_repository.object_type%TYPE) IS
+            pc_object_type    jg_sql_repository.object_type%TYPE)
+        IS
             SELECT sql_query
               FROM jg_sql_repository
              WHERE object_type = pc_object_type;
 
         v_sql_query   jg_sql_repository.sql_query%TYPE;
     BEGIN
-         OPEN c_sql_query (p_object_type);
-        FETCH c_sql_query
-         INTO v_sql_query;
+        OPEN c_sql_query (p_object_type);
+
+        FETCH c_sql_query   INTO v_sql_query;
+
         CLOSE c_sql_query;
 
         IF v_sql_query IS NULL
         THEN
-            assert (FALSE, 'Brak zdefiniowanego zapytania dla obiektu o typie ''' || p_object_type || '');
+            assert (
+                FALSE,
+                   'Brak zdefiniowanego zapytania dla obiektu o typie '''
+                || p_object_type
+                || '');
         END IF;
 
         RETURN v_sql_query;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_xslt_from_repository (
-        p_object_type                   IN        jg_sql_repository.object_type%TYPE)
-        RETURN jg_sql_repository.xslt%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        CURSOR c_xslt (
-            pc_object_type               jg_sql_repository.object_type%TYPE ) IS
+        p_object_type   IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_sql_repository.xslt%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_xslt (pc_object_type jg_sql_repository.object_type%TYPE)
+        IS
             SELECT xslt
               FROM jg_sql_repository
              WHERE object_type = pc_object_type;
 
         v_xslt   jg_sql_repository.xslt%TYPE;
     BEGIN
-         OPEN c_xslt (p_object_type);
-        FETCH c_xslt
-         INTO v_xslt;
+        OPEN c_xslt (p_object_type);
+
+        FETCH c_xslt   INTO v_xslt;
+
         CLOSE c_xslt;
 
         IF v_xslt IS NULL
         THEN
-            assert (FALSE, 'Brak zdefiniowanego szablonu xslt dla obiektu o typie ''' || p_object_type || '');
+            assert (
+                FALSE,
+                   'Brak zdefiniowanego szablonu xslt dla obiektu o typie '''
+                || p_object_type
+                || '');
         END IF;
 
         RETURN v_xslt;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION create_xml (
-        p_sql_query                     IN        jg_sql_repository.sql_query%TYPE,
-        p_object_type                   IN        jg_sql_repository.object_type%TYPE)
-        RETURN CLOB IS
-------------------------------------------------------------------------------------------------------------------------
+        p_sql_query     IN jg_sql_repository.sql_query%TYPE,
+        p_object_type   IN jg_sql_repository.object_type%TYPE)
+        RETURN CLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         v_ctx              DBMS_XMLSAVE.ctxtype;
         v_xml              CLOB;
         r_current_format   pa_xmltype.tr_format;
     BEGIN
-        r_current_format := Pa_Xmltype.biezacy_format;
-        Pa_Xmltype.Ustaw_Format_XML ();
+        r_current_format := pa_xmltype.biezacy_format;
+        pa_xmltype.ustaw_format_xml ();
 
         v_ctx := DBMS_XMLGEN.newcontext (querystring => p_sql_query);
-        Dbms_Xmlgen.setrowsettag (v_ctx, NULL);
-        Dbms_Xmlgen.setrowtag (v_ctx, p_object_type);
-        v_xml := Dbms_Xmlgen.getxml (v_ctx);
+        DBMS_XMLGEN.setrowsettag (v_ctx, NULL);
+        DBMS_XMLGEN.setrowtag (v_ctx, p_object_type);
+        v_xml := DBMS_XMLGEN.getxml (v_ctx);
         DBMS_XMLGEN.closecontext (v_ctx);
 
-        Pa_Xmltype.Ustaw_Format (r_current_format);
+        pa_xmltype.ustaw_format (r_current_format);
         RETURN v_xml;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION transform_xml (
-        p_xml                           IN        CLOB,
-        p_object_type                   IN        jg_sql_repository.object_type%TYPE,
-        p_xslt                          IN        CLOB DEFAULT NULL)
-        RETURN XMLTYPE IS
-------------------------------------------------------------------------------------------------------------------------
+        p_xml           IN CLOB,
+        p_object_type   IN jg_sql_repository.object_type%TYPE,
+        p_xslt          IN CLOB DEFAULT NULL)
+        RETURN XMLTYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         v_xslt             jg_sql_repository.xslt%TYPE := p_xslt;
         v_xml              XMLTYPE;
         r_current_format   pa_xmltype.tr_format;
         v_result           XMLTYPE;
     BEGIN
-        r_current_format := Pa_Xmltype.biezacy_format;
-        Pa_Xmltype.Ustaw_Format_XML();
+        r_current_format := pa_xmltype.biezacy_format;
+        pa_xmltype.ustaw_format_xml ();
 
         IF v_xslt IS NULL
         THEN
             v_xslt := get_xslt_from_repository (p_object_type => p_object_type);
         END IF;
 
-        v_xml    := xmltype.createxml (p_xml);
-        v_result := v_xml.transform (XMLTYPE(v_xslt));
+        v_xml := xmltype.createxml (p_xml);
+        v_result := v_xml.transform (xmltype (v_xslt));
 
-        Pa_Xmltype.Ustaw_Format (r_current_format);
+        pa_xmltype.ustaw_format (r_current_format);
         RETURN v_result;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE save_result (
-        p_inlo_id                       IN        jg_input_log.id%TYPE,
-        p_status                        IN        jg_input_log.status%TYPE,
-        p_object_id                     IN        jg_input_log.object_id%TYPE,
-        p_error                         IN        jg_input_log.error%TYPE DEFAULT NULL ) IS
-------------------------------------------------------------------------------------------------------------------------
+        p_inlo_id     IN jg_input_log.id%TYPE,
+        p_status      IN jg_input_log.status%TYPE,
+        p_object_id   IN jg_input_log.object_id%TYPE,
+        p_error       IN jg_input_log.error%TYPE DEFAULT NULL)
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         UPDATE jg_input_log
            SET status = p_status,
@@ -1050,29 +1146,36 @@ PACKAGE BODY JG_INPUT_SYNC IS
          WHERE id = p_inlo_id;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_customer (
-        p_xml                           IN        CLOB,
-        p_object_type                   IN        jg_sql_repository.object_type%TYPE)
-        RETURN jg_input_log.object_id%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xml                           XMLTYPE;
-        v_core_ns              CONSTANT VARCHAR2 (200) := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"' ;
+        p_xml           IN CLOB,
+        p_object_type   IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xml                XMLTYPE;
+        v_core_ns   CONSTANT VARCHAR2 (200)
+            := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"' ;
     BEGIN
         v_xml := transform_xml (p_xml => p_xml, p_object_type => p_object_type);
         apix_lg_konr.update_obj (p_konr                           => v_xml.getclobval,
                                  p_update_limit                   => FALSE,
                                  p_update_addresses_by_konr_mdf   => TRUE);
 
-        RETURN lg_konr_sql.id (p_symbol   => pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns));
+        RETURN lg_konr_sql.id (
+                   p_symbol   => pa_xmltype.wartosc (
+                                    v_xml,
+                                    '/PA_KONTRAHENT_TK/SYMBOL',
+                                    v_core_ns));
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_sale_order (
-        p_operation_id                  IN        jg_output_log.id%TYPE,
-        p_object_type                   IN        jg_sql_repository.object_type%TYPE)
-        RETURN jg_input_log.object_id%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
+        p_operation_id   IN jg_output_log.id%TYPE,
+        p_object_type    IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         v_xml               XMLTYPE;
         v_xml_clob          CLOB;
         v_sql_query         CLOB;
@@ -1082,15 +1185,23 @@ PACKAGE BODY JG_INPUT_SYNC IS
         v_numer             NUMBER;
         v_wzrc_id           lg_documents_templates.id%TYPE;
     BEGIN
-        Pa_Wass_Def.Ustaw (p_nazwa => 'IMPORT_INFINITE', p_wartosc => 'T');
+        pa_wass_def.ustaw (p_nazwa => 'IMPORT_INFINITE', p_wartosc => 'T');
 
         v_sql_query := get_query_from_sql_repository (p_object_type);
-        v_sql_query := REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
+        v_sql_query :=
+            REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
 
-        v_xml_clob        := create_xml (v_sql_query, p_object_type);
-        v_xml             := transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
-        v_wzrc_id         := Lg_Wzrc_Sql.id(p_wzorzec => pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/WZORZEC'));
-        v_data_realizacji := to_date(pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/DATA_REALIZACJI'), 'YYYY-MM-DD"T"HH24:MI:SS".0000000+02:00"');
+        v_xml_clob := create_xml (v_sql_query, p_object_type);
+        v_xml :=
+            transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
+        v_wzrc_id :=
+            lg_wzrc_sql.id (
+                p_wzorzec   => pa_xmltype.wartosc (v_xml,
+                                                   '/LG_ZASP_T/WZORZEC'));
+        v_data_realizacji :=
+            TO_DATE (
+                pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/DATA_REALIZACJI'),
+                'YYYY-MM-DD"T"HH24:MI:SS".0000000+02:00"');
 
         lg_dosp_numerowanie.ustal_kolejny_numer (
             po_symbol          => v_symbol,
@@ -1100,32 +1211,50 @@ PACKAGE BODY JG_INPUT_SYNC IS
             p_data_sprzedazy   => v_data_realizacji,
             p_wzrc_id          => v_wzrc_id);
 
-        v_xml := XMLTYPE.APPENDCHILDXML (v_xml, 'LG_ZASP_T', XMLTYPE ('<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));
-        Apix_Lg_Zasp.Aktualizuj (p_zamowienie => v_xml.getclobval);
-        Lg_Dosp_Obe.Zakoncz;
+        v_xml :=
+            xmltype.APPENDCHILDXML (
+                v_xml,
+                'LG_ZASP_T',
+                xmltype (
+                    '<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));
+        apix_lg_zasp.aktualizuj (p_zamowienie => v_xml.getclobval);
+        lg_dosp_obe.zakoncz;
 
-        Pa_Wass_Def.Usun (p_nazwa => 'IMPORT_INFINITE');
+        pa_wass_def.usun (p_nazwa => 'IMPORT_INFINITE');
 
-        RETURN lg_sord_sql.id_symbol (p_symbol => pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/SYMBOL_DOKUMENTU'));
+        RETURN lg_sord_sql.id_symbol (
+                   p_symbol   => pa_xmltype.wartosc (
+                                    v_xml,
+                                    '/LG_ZASP_T/SYMBOL_DOKUMENTU'));
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE send_response IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xml                             XMLTYPE;
-        v_xml_clob                        CLOB;
-        v_xslt                            CLOB;
-        v_sql_query                       VARCHAR2 (4000);
-        v_oryginal_id                     VARCHAR2 (100);
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_response
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xml              XMLTYPE;
+        v_xml_clob         CLOB;
+        v_xslt             CLOB;
+        v_sql_query        VARCHAR2 (4000);
+        v_oryginal_id      VARCHAR2 (100);
+        v_sciezka          VARCHAR2 (500);
+        v_ctx              DBMS_XMLSAVE.ctxtype;
+        r_current_format   pa_xmltype.tr_format;
+        v_xml_type         XMLTYPE;
+        v_xml_response     CLOB;
     BEGIN
         FOR r_inlo IN (SELECT *
-                         FROM jg_input_log inlo
-                        WHERE     inlo.xml_response IS NULL
-                              AND inlo.object_id IS NOT NULL)
+                       FROM jg_input_log inlo
+                       WHERE inlo.xml_response IS NULL)
         LOOP
             IF r_inlo.object_type = 'ORDER'
             THEN
-                v_sql_query := 'SELECT sord.doc_symbol_rcv order_number,
+                v_xml_response := NULL;
+
+                IF r_inlo.object_id IS NOT NULL
+                THEN
+                    v_sql_query :=
+                           'SELECT sord.doc_symbol_rcv order_number,
                                ''ESTABLISHED''     status,
                                CURSOR (SELECT zare.data_modyfikacji             reservation_date,
                                               sori.item_symbol                  commodity_id,
@@ -1139,9 +1268,11 @@ PACKAGE BODY JG_INPUT_SYNC IS
                                               AND reze.zare_id(+) = zare.id
                                               AND sori.document_id = sord.id) reservations
                           FROM lg_sal_orders sord
-                         WHERE sord.id = ' || r_inlo.object_id;
+                         WHERE sord.id = '
+                        || r_inlo.object_id;
 
-                v_xslt := '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                    v_xslt :=
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                            <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                            <xsl:strip-space elements="*"/>
                            <xsl:template match="node()|@*">
@@ -1155,67 +1286,173 @@ PACKAGE BODY JG_INPUT_SYNC IS
                           </xsl:template>
                           </xsl:stylesheet>';
 
-                v_xml_clob := create_xml(v_sql_query, 'ORDER_RESPONSE');
-                v_xml      := transform_xml(v_xml_clob, 'ORDER_RESPONSE', v_xslt);
+                    v_xml_clob := create_xml (v_sql_query, 'ORDER_RESPONSE');
 
-                jg_output_sync.send_text_file_to_ftp (p_xml       => v_xml.getClobVal(),
-                                                      p_file_name => '/IN/responses/Response_' || r_inlo.file_name);
 
-                UPDATE jg_input_log
-                   SET xml_response = v_xml.getClobVal()
-                 WHERE id = r_inlo.id;
-            ELSIF     r_inlo.object_type = 'NEW_CONTRACTORS'
-                  OR  r_inlo.object_type = 'CUSTOMER_DATA'
-            THEN
-                v_oryginal_id := NULL;
+                    IF v_xml_clob IS NOT NULL
+                    THEN
+                        v_xml :=
+                            transform_xml (v_xml_clob,
+                                           'ORDER_RESPONSE',
+                                           v_xslt);
+
+                        jg_output_sync.send_text_file_to_ftp (
+                            p_xml         => v_xml.getclobval (),
+                            p_file_name   =>    '/IN/responses/orders/orderExtended_'
+                                             || r_inlo.file_name);
+
+                        v_xml_response := v_xml.getclobval ();
+                    END IF;
+                END IF;
+
+                v_sciezka := '/Order/OrderHeader/OrderNumber';
 
                 BEGIN
                     v_oryginal_id :=
                         pa_xmltype.wartosc (px_xml      => xmltype (r_inlo.xml),
-                                            p_sciezka   => '/Order/ID');
+                                            p_sciezka   => v_sciezka);
                 EXCEPTION
                     WHEN OTHERS
                     THEN
                         v_oryginal_id := 'TO_CHAR(NULL)';
                 END;
 
-                v_sql_query := 'SELECT symbol       customer_number,
-                                       ''IMPORTED'' status
-                                  FROM ap_kontrahenci konr
-                                 WHERE konr.id = ' || r_inlo.object_id;
+                v_sql_query :=
+                       'SELECT '
+                    || v_oryginal_id
+                    || ' order_number,
+                               status,
+                               TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
+                               TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
+                               FILE_NAME,
+                               error ERROR_MESSAGE,
+                               (SELECT symbol
+                                  FROM lg_sal_orders
+                                 WHERE id = inlo.object_id)
+                                   erp_order_symbol
+                          FROM jg_input_log inlo
+                         WHERE id ='
+                    || r_inlo.id;
 
-                v_xml_clob := create_xml(v_sql_query, 'CONTRACTOR_RESPONSE');
-                jg_output_sync.send_text_file_to_ftp (p_xml       => v_xml_clob,
-                                                      p_file_name => '/IN/responses/Response_' || r_inlo.file_name);
+                v_xml_clob :=
+                    create_xml (v_sql_query,
+                                r_inlo.object_type || '_RESPONSE');
+
+
+                IF v_xml_clob IS NOT NULL
+                THEN
+                    BEGIN
+                        jg_output_sync.send_text_file_to_ftp (
+                            p_xml         => v_xml_clob,
+                            p_file_name   =>    '/IN/responses/orders/order_'
+                                             || r_inlo.file_name);
+
+
+
+                        v_xml_response :=
+                            NVL (CONCAT (v_xml_response, v_xml_clob),
+                                 v_xml_clob);
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            NULL;
+                    END;
+                END IF;
 
                 UPDATE jg_input_log
-                   SET xml_response = v_xml_clob
+                   SET xml_response = v_xml_response
                  WHERE id = r_inlo.id;
-            END IF;
+            --
+            ELSIF    r_inlo.object_type = 'NEW_CONTRACTORS'
+                  OR r_inlo.object_type = 'CUSTOMER_DATA'
+            THEN
+                v_oryginal_id := NULL;
 
+                IF r_inlo.object_type = 'NEW_CONTRACTORS'
+                THEN
+                    v_sciezka := '/NewCustomer/BasicData/MobizID';
+                ELSE
+                    v_sciezka := '/CustomerData/BasicData/MobizID';
+                END IF;
+
+
+                BEGIN
+                    v_oryginal_id :=
+                        pa_xmltype.wartosc (px_xml      => xmltype (r_inlo.xml),
+                                            p_sciezka   => v_sciezka);
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        v_oryginal_id := 'TO_CHAR(NULL)';
+                END;
+
+                v_sql_query :=
+                       'SELECT '
+                    || v_oryginal_id
+                    || ' MOBIZID,
+                               status,
+                               TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
+                               TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
+                               FILE_NAME,
+                               error ERROR_MESSAGE,
+                               (SELECT symbol
+                                  FROM ap_kontrahenci
+                                 WHERE id = inlo.object_id)
+                                   erp_contractor_symbol
+                          FROM jg_input_log inlo
+                         WHERE id ='
+                    || r_inlo.id;
+
+                v_xml_clob :=
+                    create_xml (v_sql_query,
+                                r_inlo.object_type || '_RESPONSE');
+
+                IF v_xml_clob IS NOT NULL
+                THEN
+                    BEGIN
+                        jg_output_sync.send_text_file_to_ftp (
+                            p_xml         => v_xml_clob,
+                            p_file_name   =>    '/IN/responses/contractors/contractor_'
+                                             || r_inlo.file_name);
+
+                        UPDATE jg_input_log
+                           SET xml_response = v_xml_clob
+                         WHERE id = r_inlo.id;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            NULL;
+                    END;
+                END IF;
+            END IF;
         END LOOP;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE process (
-        pr_operation                      IN      jg_input_log%ROWTYPE ) IS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE process (pr_operation IN jg_input_log%ROWTYPE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         v_object_id   jg_input_log.object_id%TYPE;
     BEGIN
         CASE pr_operation.object_type
-
-        WHEN 'NEW_CONTRACTORS'
-        THEN
-            v_object_id := import_customer (p_xml           => pr_operation.xml,
-                                            p_object_type   => pr_operation.object_type);
-        WHEN 'CUSTOMER_DATA'
-        THEN
-            v_object_id := import_customer (p_xml           => pr_operation.xml,
-                                            p_object_type   => pr_operation.object_type);
-        WHEN 'ORDER'
-        THEN
-            v_object_id := import_sale_order (p_operation_id   => pr_operation.id,
-                                              p_object_type    => pr_operation.object_type);
+            WHEN 'NEW_CONTRACTORS'
+            THEN
+                v_object_id :=
+                    import_customer (
+                        p_xml           => pr_operation.xml,
+                        p_object_type   => pr_operation.object_type);
+            WHEN 'CUSTOMER_DATA'
+            THEN
+                v_object_id :=
+                    import_customer (
+                        p_xml           => pr_operation.xml,
+                        p_object_type   => pr_operation.object_type);
+            WHEN 'ORDER'
+            THEN
+                v_object_id :=
+                    import_sale_order (
+                        p_operation_id   => pr_operation.id,
+                        p_object_type    => pr_operation.object_type);
         END CASE;
 
         save_result (p_inlo_id     => pr_operation.id,
@@ -1223,26 +1460,28 @@ PACKAGE BODY JG_INPUT_SYNC IS
                      p_object_id   => v_object_id);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE Get_From_Ftp IS
-------------------------------------------------------------------------------------------------------------------------
-        v_connection                    UTL_TCP.connection;
-        v_file_list                     jg_ftp.t_string_table;
-        v_file                          CLOB;
-        v_object_type                   jg_input_log.object_type%TYPE;
-        v_on_time                       jg_input_log.on_time%TYPE;
-        v_error                         jg_input_log.error%TYPE;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE get_from_ftp
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_connection    UTL_TCP.connection;
+        v_file_list     jg_ftp.t_string_table;
+        v_file          CLOB;
+        v_object_type   jg_input_log.object_type%TYPE;
+        v_on_time       jg_input_log.on_time%TYPE;
+        v_error         jg_input_log.error%TYPE;
     BEGIN
         BEGIN
-            v_connection := jg_ftp.login (
+            v_connection :=
+                jg_ftp.login (
                     p_host   => jg_ftp_configuration.sf_ftp_host,
                     p_port   => jg_ftp_configuration.sf_ftp_port,
                     p_user   => jg_ftp_configuration.sf_ftp_user,
                     p_pass   => jg_ftp_configuration.sf_ftp_password);
 
             FOR r_sqre IN (SELECT *
-                             FROM jg_sql_repository sqre
-                            WHERE sqre.direction = 'IN')
+                           FROM jg_sql_repository sqre
+                           WHERE sqre.direction = 'IN')
             LOOP
                 v_file_list := NULL;
                 jg_ftp.nlst (p_conn   => v_connection,
@@ -1259,42 +1498,65 @@ PACKAGE BODY JG_INPUT_SYNC IS
                             v_object_type := r_sqre.object_type;
 
                             IF     v_object_type = 'NEW_CONTRACTORS'
-                               AND INSTR (UPPER(v_file_list (v_i)), 'CUSTOMER_DATA') > 0
+                               AND INSTR (UPPER (v_file_list (v_i)),
+                                          'CUSTOMER_DATA') > 0
                             THEN
                                 v_object_type := 'CUSTOMER_DATA';
                             END IF;
 
                             IF INSTR (v_file_list (v_i), '.xml') > 0
                             THEN
-                                v_file := jg_ftp.get_remote_ascii_data (p_conn   => v_connection,
-                                                                        p_file   => r_sqre.file_location || '/' || v_file_list (v_i));
+                                v_file :=
+                                    jg_ftp.get_remote_ascii_data (
+                                        p_conn   => v_connection,
+                                        p_file   =>    r_sqre.file_location
+                                                    || '/'
+                                                    || v_file_list (v_i));
 
-                                INSERT INTO jg_input_log (id, file_name, object_type, xml, on_time)
-                                     VALUES (jg_inlo_seq.NEXTVAL,
-                                             v_file_list (v_i),
-                                             v_object_type,
-                                             v_file,
-                                             'T');
+                                INSERT INTO jg_input_log (id,
+                                                          file_name,
+                                                          object_type,
+                                                          xml,
+                                                          on_time)
+                                VALUES (jg_inlo_seq.NEXTVAL,
+                                        v_file_list (v_i),
+                                        v_object_type,
+                                        v_file,
+                                        'T');
 
-                                jg_ftp.rename (p_conn => v_connection,
-                                               p_from => r_sqre.file_location || '/' || v_file_list (v_i),
-                                               p_to   => r_sqre.file_location || '/archive/' || v_file_list (v_i));
+                                jg_ftp.rename (
+                                    p_conn   => v_connection,
+                                    p_from   =>    r_sqre.file_location
+                                                || '/'
+                                                || v_file_list (v_i),
+                                    p_to     =>    r_sqre.file_location
+                                                || '/archive/'
+                                                || v_file_list (v_i));
                             END IF;
                         EXCEPTION
-                        WHEN OTHERS
-                        THEN
-                            ROLLBACK TO process_file;
+                            WHEN OTHERS
+                            THEN
+                                ROLLBACK TO process_file;
 
-                            v_error := SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace;
+                                v_error :=
+                                       SQLERRM
+                                    || CHR (13)
+                                    || DBMS_UTILITY.format_error_backtrace;
 
-                            INSERT INTO jg_input_log (id, file_name, object_type, xml, on_time, status, error)
-                                 VALUES (jg_inlo_seq.NEXTVAL,
-                                         v_file_list (v_i),
-                                         v_object_type,
-                                         v_file,
-                                         v_on_time,
-                                         'ERROR',
-                                         v_error);
+                                INSERT INTO jg_input_log (id,
+                                                          file_name,
+                                                          object_type,
+                                                          xml,
+                                                          on_time,
+                                                          status,
+                                                          error)
+                                VALUES (jg_inlo_seq.NEXTVAL,
+                                        v_file_list (v_i),
+                                        v_object_type,
+                                        v_file,
+                                        v_on_time,
+                                        'ERROR',
+                                        v_error);
                         END;
                     END LOOP;
                 END IF;
@@ -1302,18 +1564,19 @@ PACKAGE BODY JG_INPUT_SYNC IS
 
             jg_ftp.LOGOUT (v_connection);
         EXCEPTION
-        WHEN OTHERS
-        THEN
-            jg_ftp.LOGOUT (v_connection);
-            assert (FALSE, SQLERRM || '  ' || DBMS_UTILITY.format_error_backtrace);
+            WHEN OTHERS
+            THEN
+                jg_ftp.LOGOUT (v_connection);
+                assert (
+                    FALSE,
+                    SQLERRM || '  ' || DBMS_UTILITY.format_error_backtrace);
         END;
 
         COMMIT;
 
         FOR r_operation IN (SELECT *
-                              FROM jg_input_log
-                             WHERE     status = 'READY'
-                                   AND on_time = 'T')
+                            FROM jg_input_log
+                            WHERE status = 'READY' AND on_time = 'T')
         LOOP
             SAVEPOINT operation;
 
@@ -1324,42 +1587,48 @@ PACKAGE BODY JG_INPUT_SYNC IS
                 THEN
                     ROLLBACK TO operation;
                     save_result (
-                        p_inlo_id   => r_operation.id,
-                        p_status    => 'ERROR',
-                        p_object_id => NULL,
-                        p_error     => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                        p_inlo_id     => r_operation.id,
+                        p_status      => 'ERROR',
+                        p_object_id   => NULL,
+                        p_error       =>    SQLERRM
+                                         || CHR (13)
+                                         || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
 
         send_response;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE Process_All IS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE process_all
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
-        FOR r_operation IN (SELECT * FROM jg_input_log WHERE status = 'READY')
+        FOR r_operation IN (SELECT *
+                            FROM jg_input_log
+                            WHERE status = 'READY')
         LOOP
             SAVEPOINT operation;
 
             BEGIN
                 process (pr_operation => r_operation);
             EXCEPTION
-            WHEN OTHERS
-            THEN
-                ROLLBACK TO operation;
+                WHEN OTHERS
+                THEN
+                    ROLLBACK TO operation;
 
-                save_result (
-                    p_inlo_id     => r_operation.id,
-                    p_status      => 'ERROR',
-                    p_object_id   => NULL,
-                    p_error       => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                    save_result (
+                        p_inlo_id     => r_operation.id,
+                        p_status      => 'ERROR',
+                        p_object_id   => NULL,
+                        p_error       =>    SQLERRM
+                                         || CHR (13)
+                                         || DBMS_UTILITY.format_error_backtrace);
             END;
         END LOOP;
 
         send_response;
     END;
-
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
