@@ -347,6 +347,7 @@ GROUP BY rndo.symbol_dokumentu,
 
     v_order_clob :=
         'SELECT header.*,
+                sord.guid,
                             TRUNC(TO_DATE(header.order_issue_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS'')) order_issue_date,
                             TRUNC(TO_DATE(header.requested_delivery_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS'')) requested_delivery_date,
                             wzrc.document_type document_type,
@@ -397,6 +398,7 @@ GROUP BY rndo.symbol_dokumentu,
                                       WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
                                             AND konr.symbol = header.seller_buyer_id ) odbiorca,
                             CURSOR ( SELECT item_xml.*,
+                                            sori.guid,
                                             (item_xml.unit_price_base - item_xml.unit_price_value) discount_value,
                                             inma.nazwa commodity_name,
                                             inma.jdmr_nazwa_pdst_sp jdmr_nazwa,
@@ -417,9 +419,13 @@ GROUP BY rndo.symbol_dokumentu,
                                                                unit_discount_value    VARCHAR2 (30) PATH ''/Item/UnitDiscountValue'',
                                                                unit_discount          VARCHAR2 (30) PATH ''/Item/UnitDiscount'',
                                                                promotion_code         VARCHAR2 (30) PATH ''/Item/PromotionCode'',
-                                                               promotion_name         VARCHAR2 (30) PATH ''/Item/PromotionName'') item_xml                                                               
+                                                               promotion_name         VARCHAR2 (30) PATH ''/Item/PromotionName'') item_xml,
+                                            lg_sal_orders_it sori                                                           
                                       WHERE     log1.id = LOG.id
-                                            AND inma.indeks = item_xml.seller_item_id) items
+                                            AND inma.indeks = item_xml.seller_item_id
+                                            AND (    sori.document_id (+) = sord.id
+                                                 AND sori.item_symbol (+) = item_xml.seller_item_id)
+                                                 AND sori.ordinal (+) = item_xml.item_num) items
                        FROM jg_input_log LOG,
                             lg_documents_templates wzrc,
                             lg_punkty_sprzedazy pusp,
@@ -438,9 +444,12 @@ GROUP BY rndo.symbol_dokumentu,
                                               seller_contact_tel                   VARCHAR2 (30)      PATH ''/Order/OrderParty/BuyerParty/Contact/Tel'',
                                               sr_party_description              VARCHAR2 (30)      PATH ''/Order/OrderParty/SRParty/Description'',
                                               net_value                               VARCHAR2(30)        PATH ''/Order/OrderSummary/TotalNetAmount'',
-                                              gross_value                            VARCHAR2(30)        PATH ''/Order/OrderSummary/TotalGrossAmount'' ) header
+                                              gross_value                            VARCHAR2(30)        PATH ''/Order/OrderSummary/TotalGrossAmount'' ) header,
+                            lg_sal_orders sord
                       WHERE     pusp.id = wzrc.pusp_id
                             AND wzrc.pattern = header.order_pattern
+                            AND (    sord.doc_symbol_rcv(+) = header.order_number
+                                 AND sord.payer_symbol(+) = header.seller_buyer_id)
                             AND LOG.id = :p_operation_id';
 
     v_xslt :=
@@ -454,6 +463,11 @@ GROUP BY rndo.symbol_dokumentu,
           <SYMBOL_ODBIORCY>
             <xsl:value-of select="."/>
           </SYMBOL_ODBIORCY>
+        </xsl:for-each>
+        <xsl:for-each select="GUID">
+          <GUID_DOKUMENTU>
+            <xsl:value-of select="."/>
+          </GUID_DOKUMENTU>
         </xsl:for-each>
         <xsl:for-each select="ORDER_PATTERN">
           <WZORZEC>
@@ -714,6 +728,11 @@ GROUP BY rndo.symbol_dokumentu,
           <xsl:for-each select="ITEMS">
             <xsl:for-each select="ITEMS_ROW">
               <LG_ZASI_T>
+                <xsl:for-each select="GUID">
+                  <GUID_POZYCJI>
+                    <xsl:value-of select="."/>
+                  </GUID_POZYCJI>
+                </xsl:for-each>
                 <xsl:for-each select="ITEM_NUM">
                   <LP>
                     <xsl:value-of select="."/>
@@ -746,7 +765,7 @@ GROUP BY rndo.symbol_dokumentu,
                     <xsl:value-of select="."/>
                   </KOD_WALUTY>
                 </xsl:for-each>
-                <xsl:for-each select="UNIT_PRICE_BASE">
+                <xsl:for-each select="UNIT_PRICE_VALUE">
                   <CENA>
                     <xsl:value-of select="."/>
                   </CENA>
