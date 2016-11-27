@@ -1892,3 +1892,25 @@ GROUP BY maga.kod, maga.nazwa',
                    'OUT');
 END;
 /
+
+BEGIN
+    DBMS_SCHEDULER.DROP_JOB(job_name=> 'INTEGRACJAINFINITE');
+    DBMS_SCHEDULER.create_job (
+        '"INTEGRACJAINFINITE"',
+        job_type              => 'PLSQL_BLOCK',
+        job_action            => 'BEGIN jg_output_sync.PROCESS(); jg_input_sync.get_from_ftp(); END;',
+        number_of_arguments   => 0,
+        start_date            => TO_TIMESTAMP_TZ (
+                                    '18-SEP-2016 12.40.32,357000000 PM +02:00',
+                                    'DD-MON-RRRR HH.MI.SSXFF AM TZR',
+                                    'NLS_DATE_LANGUAGE=english'),
+        repeat_interval       => 'FREQ=MINUTELY; INTERVAL=10;',
+        end_date              => NULL,
+        job_class             => '"DEFAULT_JOB_CLASS"',
+        enabled               => FALSE,
+        auto_drop             => TRUE,
+        comments              => NULL);
+    DBMS_SCHEDULER.enable ('"INTEGRACJAINFINITE"');
+    COMMIT;
+END; 
+
