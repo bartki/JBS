@@ -81,6 +81,10 @@ GROUP BY rndo.symbol_dokumentu,
        inma.nazwa name,
        ec ec,
        inma.jdmr_nazwa base_unit_of_measure_code,
+       BIN_TO_NUM (DECODE (atrybut_c01, 'T', 1, 0),
+                   DECODE (ec, 'T', 1, 0),
+                   DECODE (w_ofercie, 'T', 1, 0),
+                   DECODE (mozliwe_sprzedawanie, 'T', 1, 0)) AVAILABILITY,
        (SELECT MAX (kod_kreskowy) ean
           FROM lg_przeliczniki_jednostek prje
          WHERE     prje.kod_kreskowy IS NOT NULL
