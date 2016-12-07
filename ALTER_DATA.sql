@@ -962,29 +962,20 @@ GROUP BY rndo.symbol_dokumentu,
                    jg_sqre_seq.NEXTVAL,
                    'SALES_REPRESENTATIVES',
                    'SELECT okgi.id,
-       osby.imie || '' '' || osby.nazwisko AS name,
+       osby.imie || ' ' || osby.nazwisko AS name,
        osol.atrybut_t02 AS numer_kasy,
-          osby.imie
-       || '',''
-       || osby.nazwisko
-       || '',''
-       || osol.kod
-       || '',''
-       || osol.atrybut_t01
-       || '',T''
-           AS id_erp,
+       osol.kod AS id_erp,
        1 AS active,
-       TRANSLATE (
-           osby.imie || ''.'' || osby.nazwisko || ''.JBS'',
-           ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
-           ''AaCcEeLlNnOoSsZzZz'')
+       TRANSLATE (osby.imie || '.' || osby.nazwisko || '.JBS',
+                  'ĄąĆćĘęŁłŃńÓóŚśŹźŻż',
+                  'AaCcEeLlNnOoSsZzZz')
            AS userlogin,
        osby.imie username,
        osby.nazwisko usersurname,
        TRANSLATE (
-           SUBSTR (osby.imie, 1, 1) || '.' || osby.nazwisko || ''@GOLDWELL.PL'',
-           ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
-           ''AaCcEeLlNnOoSsZzZz'')
+           SUBSTR (osby.imie, 1, 1) || '.' || osby.nazwisko || '@GOLDWELL.PL',
+           'ĄąĆćĘęŁłŃńÓóŚśŹźŻż',
+           'AaCcEeLlNnOoSsZzZz')
            AS useremail,
        okgi.atrybut_t02 AS userphone,
        okgi.id AS area_id,
