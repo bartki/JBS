@@ -222,8 +222,8 @@ GROUP BY rndo.symbol_dokumentu,
                            WHERE     osol.atrybut_t01 = grko.nazwa
                                  AND grko.id = kngr.grkn_id
                                  AND osol.aktualna = ''T''
-                                 AND kngr.konr_id = konr.id) representative,
-                                     konr.nr_umowy_ind default_financing_method,
+                                 AND kngr.konr_id = konr.id) representative,                          
+                          konr.foza_kod default_financing_method,
                           CURSOR (SELECT ulica        street,
                                          nr_domu      house_number,
                                          nr_lokalu    flat_number,
