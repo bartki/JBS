@@ -1428,25 +1428,27 @@ GROUP BY rndo.symbol_dokumentu,
                    jg_sqre_seq.NEXTVAL,
                    'WAREHOUSES',
                    'SELECT maga.kod id,
-       maga.nazwa name,
-       CURSOR (
-           SELECT inma1.indeks commodity_id,
-                  jg_output_sync.format_number (stma1.stan_goracy, 100)
-                      quantity
-             FROM ap_stany_magazynowe stma1,
-                  ap_indeksy_materialowe inma1,
-                  ap_magazyny maga1
-            WHERE     inma1.id = stma1.suob_inma_id
-                  AND maga1.id = stma1.suob_maga_id
-                  AND stma1.id IN (:p_id)
-                  AND maga1.kod = maga.kod
-                  and maga.kod = ''500'')
-           stocks
-  FROM ap_stany_magazynowe stma, ap_magazyny maga
- WHERE     stma.suob_maga_id = maga.id
-       AND (kod LIKE ''1__'' OR kod = ''500'')
-       AND stma.id IN (:p_id)
-GROUP BY maga.kod, maga.nazwa',
+                           maga.nazwa name,
+                           CURSOR (
+                              SELECT inma1.indeks commodity_id,
+                                     jg_output_sync.format_number (sum(stma1.stan_goracy), 100) quantity
+                                FROM ap_stany_magazynowe stma1,
+                                     ap_indeksy_materialowe inma1,
+                                     ap_magazyny maga1
+                               WHERE     inma1.id = stma1.suob_inma_id
+                                     AND maga1.id = stma1.suob_maga_id
+                                     AND maga1.kod = maga.kod
+                                     AND stma1.suob_inma_id IN (SELECT suob_inma_id
+                                                                  FROM ap_stany_magazynowe stma 
+                                                                 WHERE stma.id IN (:p_id))
+                            GROUP BY inma1.indeks) stocks
+                      FROM ap_stany_magazynowe stma,
+                           ap_magazyny maga
+                     WHERE     stma.suob_maga_id = maga.id
+                           AND (kod LIKE ''1__'' OR kod IN (''500'', ''300''))
+                           AND stma.id IN (:p_id)
+                  GROUP BY maga.kod,
+                           maga.nazw',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                     <xsl:strip-space elements="*"/>
