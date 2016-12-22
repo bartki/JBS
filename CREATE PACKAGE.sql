@@ -1010,8 +1010,9 @@ CREATE OR REPLACE PACKAGE jg_input_sync IS
 END;
 /
 
-CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
-------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE PACKAGE BODY jg_input_sync
+IS
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_query_from_sql_repository (
         p_object_type   IN jg_input_log.object_type%TYPE)
         RETURN jg_sql_repository.sql_query%TYPE
@@ -1180,41 +1181,41 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             SELECT symbol
               FROM lg_sal_orders sord
              WHERE sord.doc_symbol_rcv = pc_doc_symbol_rcv;
-               
-        v_xml               XMLTYPE;
-        v_xml_clob          CLOB;
-        v_sql_query         CLOB;
-        v_symbol            lg_sal_orders.symbol%TYPE;
-        v_cinn_id           lg_sal_orders.cinn_id%TYPE;
-        v_data_realizacji   lg_sal_orders.realization_date%TYPE;
-        v_numer             NUMBER;
-        v_wzrc_id           lg_documents_templates.id%TYPE;
-        v_sord_id           lg_sal_orders.id%TYPE;
-        v_order_type        VARCHAR2(1);
-        v_doc_symbol_rcv    lg_sal_orders.doc_symbol_rcv%TYPE;
-        v_should_calculate  BOOLEAN := TRUE;
+
+        v_xml                       XMLTYPE;
+        v_xml_clob                  CLOB;
+        v_sql_query                 CLOB;
+        v_symbol                    lg_sal_orders.symbol%TYPE;
+        v_cinn_id                   lg_sal_orders.cinn_id%TYPE;
+        v_data_realizacji           lg_sal_orders.realization_date%TYPE;
+        v_numer                     NUMBER;
+        v_wzrc_id                   lg_documents_templates.id%TYPE;
+        v_sord_id                   lg_sal_orders.id%TYPE;
+        v_order_type                VARCHAR2(1);
+        v_doc_symbol_rcv            lg_sal_orders.doc_symbol_rcv%TYPE;
+        v_should_calculate          BOOLEAN := TRUE;
     BEGIN
         pa_wass_def.ustaw (p_nazwa => 'IMPORT_INFINITE', p_wartosc => 'T');
-        
+
         v_sql_query := get_query_from_sql_repository (p_object_type);
         v_sql_query := REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
 
         v_xml_clob       := create_xml (v_sql_query, p_object_type);
         v_order_type     := pa_xmltype.wartosc(XMLTYPE(v_xml_clob), '/ORDER/ORDER_TYPE');
-        v_doc_symbol_rcv := pa_xmltype.wartosc(XMLTYPE(v_xml_clob), '/ORDER/ORDER_NUMBER');    
-               
+        v_doc_symbol_rcv := pa_xmltype.wartosc(XMLTYPE(v_xml_clob), '/ORDER/ORDER_NUMBER');
+
         v_xml      := transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
         v_wzrc_id  := lg_wzrc_sql.id (p_wzorzec => pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/WZORZEC'));
-        v_data_realizacji := TO_DATE (pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/DATA_REALIZACJI'), 'YYYY-MM-DD"T"HH24:MI:SS".0000000+02:00"');
+        v_data_realizacji       := TO_DATE (pa_xmltype.wartosc (v_xml, '/LG_ZASP_T/DATA_REALIZACJI'), 'YYYY-MM-DD"T"HH24:MI:SS".0000000+02:00"');
 
         OPEN c_sord(v_doc_symbol_rcv);
         FETCH c_sord
          INTO v_symbol;
-         
+
         IF c_sord%NOTFOUND
         THEN
             v_should_calculate := TRUE;
-            
+
             lg_dosp_numerowanie.ustal_kolejny_numer (
                 po_symbol          => v_symbol,
                 po_cinn_id         => v_cinn_id,
@@ -1223,12 +1224,12 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 p_data_sprzedazy   => v_data_realizacji,
                 p_wzrc_id          => v_wzrc_id);
         END IF;
-        
+
         CLOSE c_sord;
         v_xml := xmltype.APPENDCHILDXML (v_xml, 'LG_ZASP_T', xmltype ('<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));
         apix_lg_zasp.aktualizuj (p_zamowienie => v_xml.getclobval);
         v_sord_id := lg_sord_sql.id_symbol (p_symbol => v_symbol);
-        
+
         IF v_should_calculate
         THEN
             FOR r_dosi IN (SELECT * FROM lg_sal_orders_it sori WHERE sori.document_id = v_sord_id)
@@ -1238,7 +1239,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                     po_wartosc_brutto=> r_dosi.gross_value,
                     po_wartosc_netto=> r_dosi.net_value,
                     po_wartosc_vat=> r_dosi.vat_value,
-                
+
                     p_cena_z_cennika             => Pa_Liczba.Jezeli(r_dosi.doc_pricing_type = 'N', r_dosi.price_from_list_n, r_dosi.price_from_list_g),
                     p_ilosc                      => r_dosi.quantity,
                     p_stva_id                    => r_dosi.stva_id,
@@ -1247,14 +1248,19 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                     p_obciazenie_zwolnienie_ceny => r_dosi.price_difference,
                     p_wg_cen                     => r_dosi.doc_pricing_type,
                     p_typ_faktury                => r_dosi.doc_type);
-                
+
                     Lg_Sori_Def.UPDATE_ROW(pr_this=> r_dosi);
             END LOOP;
-        END IF;        
-           
+        END IF;
+
         lg_dosp_obe.zakoncz;
-        pa_wass_def.usun (p_nazwa => 'IMPORT_INFINITE');        
-       
+        pa_wass_def.usun (p_nazwa => 'IMPORT_INFINITE');
+        
+        IF lg_sord_agd.global_discount(p_id=> v_sord_id) != 0
+        THEN
+            Lg_Dosp_Def.Zmien_Dolaczono_Upust_Glb (p_dosp_id => v_sord_id, p_dolaczono_upust_glb => 'T');
+        END IF;
+        
         IF v_order_type IN ('O')
         THEN
             Lg_Dosp_Def.zatwierdz_dosp(p_dosp_id=> v_sord_id);
