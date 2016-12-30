@@ -144,34 +144,55 @@ BEGIN
     END IF;
 END;
 /
+
 CREATE OR REPLACE TRIGGER jg_kngr_observe
     BEFORE INSERT OR DELETE OR UPDATE OF grkn_id, konr_id, id
     ON lg_kontrahenci_grup
-    REFERENCING NEW AS NEW OLD AS OLD
+    REFERENCING NEW AS new OLD AS old
     FOR EACH ROW
 DECLARE
     PRAGMA AUTONOMOUS_TRANSACTION;
 BEGIN
-    FOR r_osol IN (SELECT osol.id
-                     FROM lg_osoby_log osol,
-                          (SELECT     *
-                                 FROM lg_grupy_kontrahentow
-                           START WITH id = 63
-                           CONNECT BY PRIOR id = grkn_id) grko,
-                          lg_kontrahenci_grup kngr
-                    WHERE     osol.atrybut_t01 = grko.nazwa
-                          AND grko.id = kngr.grkn_id
-                          AND osol.aktualna = 'T'
-                          AND kngr.konr_id IN (:NEW.konr_id, :OLD.konr_id))
+    FOR r_osol
+        IN (SELECT osol.id
+            FROM lg_osoby_log osol,
+                 (SELECT *
+                    FROM lg_grupy_kontrahentow
+                  START WITH id = 63
+                  CONNECT BY PRIOR id = grkn_id) grko
+            WHERE     osol.atrybut_t01 = grko.nazwa
+                  AND grko.id IN (:new.grkn_id, :old.grkn_id))
     LOOP
-        jg_obop_def.add_operation (p_object_id          => r_osol.id,
-                                   p_object_type        => 'SALES_REPRESENTATIVES',
-                                   p_operation_type     => 'INSERT');
+        jg_obop_def.add_operation (p_object_id        => r_osol.id,
+                                   p_object_type      => 'SALES_REPRESENTATIVES',
+                                   p_operation_type   => 'INSERT');
+    END LOOP;
+
+
+    FOR r_osol
+        IN (SELECT osol.id
+            FROM lg_osoby_log osol,
+                 (SELECT *
+                    FROM lg_grupy_kontrahentow
+                  START WITH id = 63
+                  CONNECT BY PRIOR id = grkn_id) grko,
+                 lg_kontrahenci_grup kngr
+            WHERE     osol.atrybut_t01 = grko.nazwa
+                  AND grko.id = kngr.grkn_id
+                  AND osol.aktualna = 'T'
+                  AND kngr.konr_id IN (:new.konr_id, :old.konr_id))
+    LOOP
+        jg_obop_def.add_operation (p_object_id        => r_osol.id,
+                                   p_object_type      => 'SALES_REPRESENTATIVES',
+                                   p_operation_type   => 'INSERT');
     END LOOP;
 
     COMMIT;
 END;
 /
+
+
+-- End of DDL Script for Trigger TETA_ADMIN.JG_KNGR_OBSERVE
 CREATE OR REPLACE TRIGGER jg_konr_observe
     BEFORE INSERT OR DELETE OR UPDATE OF id,
                                          aktualny,
