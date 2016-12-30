@@ -1263,6 +1263,10 @@ IS
         
         IF v_order_type IN ('O')
         THEN
+             UPDATE lg_sal_orders
+               SET generate_warehouse_doc = 'T'
+             WHERE id = v_sord_id;
+
             Lg_Dosp_Def.zatwierdz_dosp(p_dosp_id=> v_sord_id);
         END IF;
         
