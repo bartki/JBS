@@ -1193,7 +1193,7 @@ IS
         v_sord_id                   lg_sal_orders.id%TYPE;
         v_order_type                VARCHAR2(1);
         v_doc_symbol_rcv            lg_sal_orders.doc_symbol_rcv%TYPE;
-        v_should_calculate          BOOLEAN := TRUE;
+        v_should_calculate          BOOLEAN := FALSE;
     BEGIN
         pa_wass_def.ustaw (p_nazwa => 'IMPORT_INFINITE', p_wartosc => 'T');
 
@@ -1627,6 +1627,7 @@ IS
 
             BEGIN
                 process (pr_operation => r_operation);
+                COMMIT;
             EXCEPTION
                 WHEN OTHERS
                 THEN
