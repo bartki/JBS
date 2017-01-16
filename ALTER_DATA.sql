@@ -1585,11 +1585,12 @@ GROUP BY rndo.symbol_dokumentu,
        SUM (fwk.fwk_m_pozostalo) + SUM (fwk.fwk_t_pozostalo)
            AS sum_support_fund
   FROM jbs_mp_przeglad_fwk fwk
- WHERE     fwk.data_faktury >= ADD_MONTHS (TRUNC (SYSDATE, 'MM'), -12)
+ WHERE     fwk.data_faktury >= ADD_MONTHS (TRUNC (SYSDATE, ''MM''), -12)
        --AND fwk.czy_zaplacona = ''T''
        AND fwk.konr_symbol IN (SELECT konr_symbol
                                  FROM jbs_mp_przeglad_fwk
-                                WHERE id IN (:p_id))',
+                                WHERE id IN (:p_id))
+GROUP BY fwk.konr_symbol',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
