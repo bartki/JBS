@@ -1,5 +1,5 @@
 
-/* Formatted on 2017-01-17 20:17:02 (QP5 v5.291) */
+
 DECLARE
     v_order_clob   CLOB;
     v_xslt         CLOB;
@@ -56,7 +56,7 @@ GROUP BY rndo.symbol_dokumentu,
                            <xsl:apply-templates select="node()|@*"/>
                         </xsl:copy>
                      </xsl:template>
-                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='']"/>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
                      <xsl:template priority="2" match="ROW">
                         <INVOICE_PAYMENTS><xsl:apply-templates/></INVOICE_PAYMENTS>
                      </xsl:template>
@@ -164,7 +164,7 @@ GROUP BY rndo.symbol_dokumentu,
                            <xsl:apply-templates select="node()|@*"/>
                         </xsl:copy>
                      </xsl:template>
-                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='']"/>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
                      <xsl:template priority="2" match="UNITS_OF_MEASURE/UNITS_OF_MEASURE_ROW">
                         <UNIT_OF_MEASURE><xsl:apply-templates/></UNIT_OF_MEASURE>
                      </xsl:template>
@@ -255,7 +255,7 @@ GROUP BY rndo.symbol_dokumentu,
                           <xsl:apply-templates select="node()|@*"/>
                        </xsl:copy>
                     </xsl:template>
-                    <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='']"/>
+                    <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
                     <xsl:template priority="2" match="ROW">
                        <CONTRACTOR><xsl:apply-templates/></CONTRACTOR>
                     </xsl:template>
@@ -339,7 +339,7 @@ GROUP BY rndo.symbol_dokumentu,
                            <xsl:apply-templates select="node()|@*"/>
                         </xsl:copy>
                      </xsl:template>
-                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='']"/>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
                      <xsl:template priority="2" match="ROW">
                         <INVOICE><xsl:apply-templates/></INVOICE>
                      </xsl:template>
@@ -866,7 +866,7 @@ GROUP BY rndo.symbol_dokumentu,
                            <xsl:apply-templates select="@*|node()" />
                         </xsl:copy>
                      </xsl:template>
-                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='']"/>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
                      <xsl:template priority="2" match="ROW">
                         <RESERVATION><xsl:apply-templates/></RESERVATION>
                      </xsl:template>
@@ -938,7 +938,7 @@ GROUP BY rndo.symbol_dokumentu,
                            <xsl:apply-templates select="node()|@*"/>
                         </xsl:copy>
                      </xsl:template>
-                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='']"/>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
                      <xsl:template priority="2" match="ROW">
                         <SET_COMPONENTS><xsl:apply-templates/></SET_COMPONENTS>
                      </xsl:template>
@@ -1005,7 +1005,7 @@ GROUP BY rndo.symbol_dokumentu,
                            <xsl:apply-templates select="node()|@*"/>
                         </xsl:copy>
                      </xsl:template>
-                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='']"/>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
                      <xsl:template priority="2" match="ROW">
                         <SALES_REPRESENTATIVE><xsl:apply-templates/></SALES_REPRESENTATIVE>
                      </xsl:template>
@@ -1460,7 +1460,7 @@ GROUP BY maga.kod, maga.nazwa',
                           <xsl:apply-templates select="node()|@*"/>
                        </xsl:copy>
                     </xsl:template>
-                    <xsl:template match="*[not(@*|comment()|processing-instruction()) and normalize-space()='']"/>
+                    <xsl:template match="*[not(@*|comment()|processing-instruction()) and normalize-space()='''']"/>
                     <xsl:template priority="2" match="ROW">
                        <WAREHOUSE><xsl:apply-templates/></WAREHOUSE>
                     </xsl:template>
@@ -1877,7 +1877,7 @@ GROUP BY fwk.konr_symbol',
                            <xsl:apply-templates select="node()|@*"/>
                         </xsl:copy>
                      </xsl:template>
-                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='']"/>
+                     <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
                      <xsl:template priority="2" match="ROW">
                         <DELIVERY><xsl:apply-templates/></DELIVERY>
                      </xsl:template>
@@ -1890,6 +1890,7 @@ GROUP BY fwk.konr_symbol',
                    'OUT');
 END;
 /
+
 
 BEGIN
     DBMS_SCHEDULER.DROP_JOB(job_name=> 'INTEGRACJAINFINITE');
