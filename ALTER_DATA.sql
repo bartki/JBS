@@ -1,5 +1,3 @@
-
-
 DECLARE
     v_order_clob   CLOB;
     v_xslt         CLOB;
@@ -224,8 +222,8 @@ GROUP BY rndo.symbol_dokumentu,
                            WHERE     osol.atrybut_t01 = grko.nazwa
                                  AND grko.id = kngr.grkn_id
                                  AND osol.aktualna = ''T''
-                                 AND kngr.konr_id = konr.id) representative,                          
-                          konr.foza_kod default_financing_method,
+                                 AND kngr.konr_id = konr.id) representative,
+                                     konr.foza_kod default_financing_method,
                           CURSOR (SELECT ulica        street,
                                          nr_domu      house_number,
                                          nr_lokalu    flat_number,
@@ -1700,7 +1698,8 @@ GROUP BY fwk.konr_symbol',
         VALUES (
                    jg_sqre_seq.NEXTVAL,
                    'TRADE_CONTRACTS_INDIVIDUAL',
-                   'SELECT konr.nr_umowy_ind AS contract_number,
+                   'SELECT konr.symbol contractors_id, 
+        konr.nr_umowy_ind AS contract_number,
        DECODE (individual_contract,
                ''T'', konr.data_umowy_ind,
                konr.atrybut_d01)
@@ -1767,7 +1766,63 @@ GROUP BY fwk.konr_symbol',
         VALUES (
                    jg_sqre_seq.NEXTVAL,
                    'TRADE_CONTRACTS',
-                   'SELECT konr.nr_umowy_ind AS contract_number,
+                   'WITH ind_co
+     AS (SELECT konr.id AS konr_id,
+                DECODE (individual_contract,
+                        ''T'', a_mp_dekoduj_pkt (konr.atrybut_t07, 0),
+                        atrybut_n04)
+                    AS quarter_points,
+                DECODE (individual_contract,
+                        ''T'', a_mp_dekoduj_pkt (konr.atrybut_t07, 1),
+                        NULL)
+                    AS half_year_points,
+                DECODE (individual_contract,
+                        ''T'', a_mp_dekoduj_pkt (konr.atrybut_t07, 2),
+                        NULL)
+                    AS year_points,
+                DECODE (individual_contract,
+                        ''T'', a_mp_dekoduj_pkt (konr.atrybut_t07, 3),
+                        NULL)
+                    AS quarter_discount,
+                DECODE (individual_contract,
+                        ''T'', a_mp_dekoduj_pkt (konr.atrybut_t07, 4),
+                        NULL)
+                    AS half_year_discount,
+                DECODE (individual_contract,
+                        ''T'', a_mp_dekoduj_pkt (konr.atrybut_t07, 5),
+                        NULL)
+                    AS year_discount,
+                DECODE (individual_contract, ''T'', konr.atrybut_n05, NULL)
+                    AS quarter_threshold,
+                DECODE (individual_contract, ''T'', konr.atrybut_n02, NULL)
+                    AS half_year_threshold,
+                DECODE (individual_contract, ''T'', konr.atrybut_n03, NULL)
+                    AS year_threshold
+           FROM (SELECT CASE
+                            WHEN konr.atrybut_t05 LIKE ''%UM IND%'' THEN ''T''
+                            ELSE ''N''
+                        END
+                            individual_contract,
+                        konr.*
+                   FROM ap_kontrahenci konr
+                  WHERE konr.platnik = ''T'') konr),
+     ind_co_data
+     AS (SELECT *
+           FROM ind_co
+                UNPIVOT
+                    (quantity
+                    FOR col_name
+                    IN (quarter_points,
+                       half_year_points,
+                       year_points,
+                       quarter_discount,
+                       half_year_discount,
+                       year_discount,
+                       quarter_threshold,
+                       half_year_threshold,
+                       year_threshold)))
+SELECT konr.symbol contractors_id,
+       konr.nr_umowy_ind AS contract_number,
        DECODE (individual_contract,
                ''T'', konr.data_umowy_ind,
                konr.atrybut_d01)
@@ -1776,8 +1831,11 @@ GROUP BY fwk.konr_symbol',
        konr.foza_kod AS default_payment_type,
        NVL (konr.limit_kredytowy, 0) AS credit_limit,
        konr.dni_do_zaplaty AS payment_date,
-       prup.upust_procentowy AS discount_percent,
-       konr.atrybut_n04 AS bonus_points,
+       SUBSTR (grod.grupa, 2, 2) AS discount_percent,
+       CURSOR (SELECT col_name, quantity
+                 FROM ind_co_data icd
+                WHERE quantity IS NOT NULL AND icd.konr_id = konr.id)
+           AS bonus_points,
        DECODE (
            (SELECT COUNT (*)
               FROM lg_przyp_upustow prup1
@@ -1797,8 +1855,10 @@ GROUP BY fwk.konr_symbol',
                    individual_contract,
                konr.*
           FROM ap_kontrahenci konr) konr,
-       lg_przyp_upustow prup
- WHERE prup.grod_id(+) = konr.grod_id AND konr.id IN ( :p_id)',
+       ap_grupy_odbiorcow grod
+ WHERE     grod.id(+) = konr.grod_id
+       AND konr.platnik = ''T''
+       AND konr.id IN (:p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
@@ -1890,8 +1950,6 @@ GROUP BY fwk.konr_symbol',
                    'OUT');
 END;
 /
-
-
 BEGIN
     DBMS_SCHEDULER.DROP_JOB(job_name=> 'INTEGRACJAINFINITE');
     DBMS_SCHEDULER.create_job (
