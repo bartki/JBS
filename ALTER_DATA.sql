@@ -1,4 +1,5 @@
-/* Formatted on 13-lis-2016 11:32:56 (QP5 v5.291) */
+
+/* Formatted on 2017-01-17 20:17:02 (QP5 v5.291) */
 DECLARE
     v_order_clob   CLOB;
     v_xslt         CLOB;
@@ -81,10 +82,10 @@ GROUP BY rndo.symbol_dokumentu,
        inma.nazwa name,
        ec ec,
        inma.jdmr_nazwa base_unit_of_measure_code,
-       BIN_TO_NUM (DECODE (atrybut_c01, 'T', 1, 0),
-                   DECODE (ec, 'T', 1, 0),
-                   DECODE (w_ofercie, 'T', 1, 0),
-                   DECODE (mozliwe_sprzedawanie, 'T', 1, 0)) AVAILABILITY,
+       BIN_TO_NUM (DECODE (atrybut_c01, ''T'', 1, 0),
+                   DECODE (ec, ''T'', 1, 0),
+                   DECODE (w_ofercie, ''T'', 1, 0),
+                   DECODE (mozliwe_sprzedawanie, ''T'', 1, 0)) AVAILABILITY,
        (SELECT MAX (kod_kreskowy) ean
           FROM lg_przeliczniki_jednostek prje
          WHERE     prje.kod_kreskowy IS NOT NULL
@@ -183,6 +184,7 @@ GROUP BY rndo.symbol_dokumentu,
                    'IN/commodities',
                    'T',
                    'OUT');
+
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -962,20 +964,20 @@ GROUP BY rndo.symbol_dokumentu,
                    jg_sqre_seq.NEXTVAL,
                    'SALES_REPRESENTATIVES',
                    'SELECT okgi.id,
-       osby.imie || ' ' || osby.nazwisko AS name,
+       osby.imie || '' '' || osby.nazwisko AS name,
        osol.atrybut_t02 AS numer_kasy,
        osol.kod AS id_erp,
        1 AS active,
-       TRANSLATE (osby.imie || '.' || osby.nazwisko || '.JBS',
-                  'ĄąĆćĘęŁłŃńÓóŚśŹźŻż',
-                  'AaCcEeLlNnOoSsZzZz')
+       TRANSLATE (osby.imie || ''.'' || osby.nazwisko || ''.JBS'',
+                  ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
+                  ''AaCcEeLlNnOoSsZzZz'')
            AS userlogin,
        osby.imie username,
        osby.nazwisko usersurname,
        TRANSLATE (
-           SUBSTR (osby.imie, 1, 1) || '.' || osby.nazwisko || '@GOLDWELL.PL',
-           'ĄąĆćĘęŁłŃńÓóŚśŹźŻż',
-           'AaCcEeLlNnOoSsZzZz')
+           SUBSTR (osby.imie, 1, 1) || ''.'' || osby.nazwisko || ''@GOLDWELL.PL'',
+           ''ĄąĆćĘęŁłŃńÓóŚśŹźŻż'',
+           ''AaCcEeLlNnOoSsZzZz'')
            AS useremail,
        okgi.atrybut_t02 AS userphone,
        okgi.id AS area_id,
@@ -1428,27 +1430,28 @@ GROUP BY rndo.symbol_dokumentu,
                    jg_sqre_seq.NEXTVAL,
                    'WAREHOUSES',
                    'SELECT maga.kod id,
-                           maga.nazwa name,
-                           CURSOR (
-                              SELECT inma1.indeks commodity_id,
-                                     jg_output_sync.format_number (sum(stma1.stan_goracy), 100) quantity
-                                FROM ap_stany_magazynowe stma1,
-                                     ap_indeksy_materialowe inma1,
-                                     ap_magazyny maga1
-                               WHERE     inma1.id = stma1.suob_inma_id
-                                     AND maga1.id = stma1.suob_maga_id
-                                     AND maga1.kod = maga.kod
-                                     AND stma1.suob_inma_id IN (SELECT suob_inma_id
-                                                                  FROM ap_stany_magazynowe stma 
-                                                                 WHERE stma.id IN (:p_id))
-                            GROUP BY inma1.indeks) stocks
-                      FROM ap_stany_magazynowe stma,
-                           ap_magazyny maga
-                     WHERE     stma.suob_maga_id = maga.id
-                           AND (kod LIKE ''1__'' OR kod IN (''500'', ''300''))
-                           AND stma.id IN (:p_id)
-                  GROUP BY maga.kod,
-                           maga.nazw',
+       maga.nazwa name,
+       CURSOR (
+           SELECT inma1.indeks commodity_id,
+                  jg_output_sync.format_number (sum(stma1.stan_goracy), 100)
+                      quantity
+             FROM ap_stany_magazynowe stma1,
+                  ap_indeksy_materialowe inma1,
+                  ap_magazyny maga1
+            WHERE     inma1.id = stma1.suob_inma_id
+                  AND maga1.id = stma1.suob_maga_id
+                  AND stma1.suob_inma_id in (SELECT suob_inma_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
+                  AND maga1.kod = maga.kod
+                  AND maga1.id in (SELECT suob_maga_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
+                  group by inma1.indeks 
+                  )
+           stocks
+  FROM ap_stany_magazynowe stma, ap_magazyny maga
+WHERE     stma.suob_maga_id = maga.id
+       AND (kod LIKE ''1__'' OR kod in (''500'',''300''))
+       AND stma.suob_inma_id in (SELECT suob_inma_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
+       AND stma.suob_maga_id in (SELECT suob_maga_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
+GROUP BY maga.kod, maga.nazwa',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                     <xsl:strip-space elements="*"/>
@@ -1480,11 +1483,11 @@ GROUP BY rndo.symbol_dokumentu,
                    jg_sqre_seq.NEXTVAL,
                    'CONTRACTS',
                    'SELECT umsp.symbol id,
-       umsp.konr_id_pl contractor_id,
+       konr.symbol contractor_id,
        umsp.data_od date_from,
        umsp.data_do date_to,
        wzrc.nazwa contract_destination,
-       jg_output_sync.format_number (umsp1.contract_value, 10) contract_valu,
+       jg_output_sync.format_number (umsp1.contract_value, 10) contract_value,
        jg_output_sync.format_number (
            (SELECT SUM (
                        lg_ums_uiwl_def.wartosc_zrl_z_dosi (
@@ -1530,12 +1533,13 @@ GROUP BY rndo.symbol_dokumentu,
             WHERE inma.id = umsi.inma_id AND umsi.umsp_id = umsp.id)
            lines
   FROM lg_ums_umowy_sprz umsp,
+       ap_kontrahenci konr,
        lg_wzorce wzrc,
        (SELECT id,
-               (SELECT SUM (pobu.wartosc)
-                  FROM lg_ums_pozycje_budzetu_umsi pobu,
+                (SELECT Lg_Ums_Umsi_Def.Wartosc(UMSI.ID)
+                  FROM 
                        lg_ums_umowy_sprz_it umsi
-                 WHERE pobu.umsi_id = umsi.id AND umsi.umsp_id = umsp.id)
+                 WHERE umsi.umsp_id = umsp.id)
                    contract_value,
                (SELECT NVL (SUM (umru.wartosc), 0)
                   FROM lg_ums_realizacje_umsi umru, lg_ums_umowy_sprz_it umsi
@@ -1546,7 +1550,7 @@ GROUP BY rndo.symbol_dokumentu,
                    AS date_from,
                atrybut_n01 duration
           FROM lg_ums_umowy_sprz umsp) umsp1
- WHERE wzrc.id = umsp.wzrc_id AND umsp.id = umsp1.id AND umsp.id IN ( :p_id)',
+ WHERE konr.id = umsp.konr_id_pl AND wzrc.id = umsp.wzrc_id AND umsp.id = umsp1.id AND umsp.id IN ( :p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
