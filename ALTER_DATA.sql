@@ -1379,27 +1379,48 @@ GROUP BY rndo.symbol_dokumentu,
         VALUES (
                    jg_sqre_seq.NEXTVAL,
                    'DISCOUNTS',
-                   'SELECT upta.symbol discount_number,
-                         inma.indeks item_index,
-                         konr.symbol customer_number,
-                         gras.kod commodity_group_code,
-                         grod.grupa reciever_group,
-                         prup.data_od date_from,
-                         prup.data_do date_to,
-                         jg_output_sync.format_number(prup.upust_procentowy, 100) percent_discount
-                    FROM lg_przyp_upustow prup
-                   INNER JOIN lg_upusty_tabelaryczne upta
-                      ON prup.upta_id = upta.id
-                    LEFT JOIN ap_indeksy_materialowe inma
-                      ON inma.id = prup.inma_id
-                    LEFT JOIN ap_kontrahenci konr
-                      ON konr.id = prup.konr_id
-                    LEFT JOIN ap_grupy_asortymentowe gras
-                      ON gras.id = prup.gras_id
-                    LEFT JOIN ap_grupy_odbiorcow grod
-                      ON grod.id = prup.grod_id
-                   WHERE     prup.upust_procentowy IS NOT NULL
-                         AND prup.id IN (:p_id)',
+                   'WITH upta
+     AS (SELECT upta.symbol,
+                wakw.id AS wakw_id,
+                upta.id AS upta_id,
+                krwy.typ_wykorzystania
+           FROM lg_upusty_tabelaryczne upta
+                JOIN lg_kryteria_wykorzystane krwy ON upta.id = krwy.upta_id
+                JOIN lg_wartosci_kryt_wyk wakw ON wakw.krwy_id = krwy.id
+          WHERE upta.symbol LIKE 'UG%'),
+     upta_koup
+     AS (SELECT a.upta_id, koup.upust_procentowy
+           FROM (SELECT *
+                   FROM upta
+                        PIVOT
+                            (MAX (wakw_id) wakw_id
+                            FOR typ_wykorzystania
+                            IN ('W' AS "W", 'K' AS "K"))) a
+                JOIN lg_komorki_upustow koup
+                    ON     koup.wakw_id_kolumna = a.k_wakw_id
+                       AND koup.wakw_id_wiersz = a.w_wakw_id)
+SELECT upta.symbol discount_number,
+       inma.indeks item_index,
+       konr.symbol customer_number,
+       gras.kod commodity_group_code,
+       grod.grupa reciever_group,
+       prup.data_od date_from,
+       NVL (prup.data_do, TO_DATE ('2049/12/31', 'YYYY/MM/DD')) date_to,
+       jg_output_sync.format_number (
+           NVL (upko.upust_procentowy, prup.upust_procentowy),
+           100)
+           percent_discount
+  FROM lg_przyp_upustow prup
+       INNER JOIN lg_upusty_tabelaryczne upta ON prup.upta_id = upta.id
+       LEFT JOIN ap_indeksy_materialowe inma ON inma.id = prup.inma_id
+       LEFT JOIN ap_kontrahenci konr ON konr.id = prup.konr_id
+       LEFT JOIN ap_grupy_asortymentowe gras ON gras.id = prup.gras_id
+       LEFT JOIN ap_grupy_odbiorcow grod ON grod.id = prup.grod_id
+       LEFT JOIN upta_koup upko ON prup.upta_id = upko.upta_id
+ WHERE     (   prup.upust_procentowy IS NOT NULL
+            OR upko.upust_procentowy IS NOT NULL)
+       AND SYSDATE BETWEEN prup.data_od AND NVL (data_do, SYSDATE)
+       AND prup.id IN (:p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
