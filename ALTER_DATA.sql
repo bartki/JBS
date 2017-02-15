@@ -450,7 +450,7 @@ SELECT header.*,
                                   PATH ''/Item/UnitDiscountValue'',
                               unit_discount  VARCHAR2 (30)
                                   PATH ''/Item/UnitDiscount'',
-                              promotion_code  VARCHAR2 (30)
+                              promotion_code  VARCHAR2 (500)
                                   PATH ''/Item/PromotionCode'',
                               promotion_name  VARCHAR2 (500)
                                   PATH ''/Item/PromotionName'') item_xml,
