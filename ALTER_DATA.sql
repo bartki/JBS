@@ -1503,31 +1503,24 @@ GROUP BY maga.kod, maga.nazwa',
                    'CONTRACTS',
                    'SELECT umsp.symbol id,
        konr.symbol contractor_id,
-       umsp.data_od date_from,
+       umsp1.date_from,
        umsp.data_do date_to,
        wzrc.nazwa contract_destination,
        jg_output_sync.format_number (umsp1.contract_value, 10) contract_value,
-       jg_output_sync.format_number (
-           (SELECT SUM (
-                       lg_ums_uiwl_def.wartosc_zrl_z_dosi (
-                           p_uiwl_id   => umsi.id))
-              FROM lg_ums_umowy_sprz_it umsi
-             WHERE umsi.umsp_id = umsp.id),
-           10)
+       jg_output_sync.format_number (umsp1.splata, 10)
            contract_value_realized,
        CASE
            WHEN   umsp1.splata
                 -   (umsp1.contract_value / umsp1.duration)
                   * (FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from))) < 0
            THEN
-              ''T''
+               ''T''
            ELSE
                ''N''
        END
            delayed,
        CASE
-           WHEN     (umsp1.contract_value / umsp1.duration)
-                  * FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from))
+           WHEN   (umsp1.contract_value / umsp1.duration) * months_passed
                 - umsp1.splata > (umsp1.contract_value / umsp1.duration) * 3
            THEN
                ''N''
@@ -1535,29 +1528,23 @@ GROUP BY maga.kod, maga.nazwa',
                ''T''
        END
            can_skip_repayment,
-       CURSOR (
-           SELECT inma.indeks commodity_id,
-                  CURSOR (
-                      SELECT pobu.data_od date_from,
-                             pobu.data_do date_to,
-                             pobu.wartosc VALUE,
-                             NVL (
-                                 lg_ums_pobu_def.wartosc_zrl_z_dosi (pobu.id),
-                                 0)
-                                 value_realized
-                        FROM lg_ums_pozycje_budzetu_umsi pobu
-                       WHERE pobu.umsi_id = umsi.id)
-                      periods
-             FROM lg_ums_umowy_sprz_it umsi, ap_indeksy_materialowe inma
-            WHERE inma.id = umsi.inma_id AND umsi.umsp_id = umsp.id)
-           lines
+       ROUND (umsp1.contract_value / umsp1.duration, 2)
+           AS monthly_installment,
+       ROUND (
+           GREATEST (
+               umsp1.splata - umsp1.contract_value,
+               LEAST (
+                   0,
+                     umsp1.splata
+                   - umsp1.contract_value / umsp1.duration * months_passed)),
+           2)
+           debt
   FROM lg_ums_umowy_sprz umsp,
        ap_kontrahenci konr,
        lg_wzorce wzrc,
        (SELECT id,
-                (SELECT Lg_Ums_Umsi_Def.Wartosc(UMSI.ID)
-                  FROM 
-                       lg_ums_umowy_sprz_it umsi
+               (SELECT lg_ums_umsi_def.wartosc (umsi.id)
+                  FROM lg_ums_umowy_sprz_it umsi
                  WHERE umsi.umsp_id = umsp.id)
                    contract_value,
                (SELECT NVL (SUM (umru.wartosc), 0)
@@ -1567,9 +1554,23 @@ GROUP BY maga.kod, maga.nazwa',
                NVL (ADD_MONTHS (umsp.data_do, -umsp.atrybut_n01) + 1,
                     umsp.data_od)
                    AS date_from,
-               atrybut_n01 duration
-          FROM lg_ums_umowy_sprz umsp) umsp1
- WHERE konr.id = umsp.konr_id_pl AND wzrc.id = umsp.wzrc_id AND umsp.id = umsp1.id AND umsp.id IN ( :p_id)',
+               NVL (umsp.atrybut_n01,
+                    ROUND (MONTHS_BETWEEN (umsp.data_do, umsp.data_od)))
+                   duration,
+               FLOOR (
+                   MONTHS_BETWEEN (
+                       SYSDATE,
+                       NVL (ADD_MONTHS (umsp.data_do, -umsp.atrybut_n01) + 1,
+                            umsp.data_od)))
+                   AS months_passed
+          FROM lg_ums_umowy_sprz umsp
+         WHERE     umsp.data_wystawienia >=
+                       TO_DATE (''2016/01/01'', ''YYYY/MM/DD'')
+               AND umsp.zamknieta = ''N'') umsp1
+ WHERE     konr.id = umsp.konr_id_pl
+       AND wzrc.id = umsp.wzrc_id
+       AND umsp.id = umsp1.id
+       AND umsp.id IN (:p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
