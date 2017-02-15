@@ -1854,9 +1854,11 @@ SELECT konr.symbol contractors_id,
        NVL (konr.limit_kredytowy, 0) AS credit_limit,
        konr.dni_do_zaplaty AS payment_date,
        SUBSTR (grod.grupa, 2, 2) AS discount_percent,
-       CURSOR (SELECT col_name, quantity
-                 FROM ind_co_data icd
-                WHERE quantity IS NOT NULL AND icd.konr_id = konr.id)
+       CURSOR (
+           SELECT col_name,
+                  jg_output_sync.format_number (quantity, 2) quantity
+             FROM ind_co_data icd
+            WHERE quantity IS NOT NULL AND icd.konr_id = konr.id)
            AS bonus_points,
        DECODE (
            (SELECT COUNT (*)
