@@ -450,6 +450,8 @@ SELECT header.*,
                                   PATH ''/Item/UnitDiscountValue'',
                               unit_discount  VARCHAR2 (30)
                                   PATH ''/Item/UnitDiscount'',
+                              description     VARCHAR2 (500)
+                                  PATH ''/Item/Description'',
                               promotion_code  VARCHAR2 (500)
                                   PATH ''/Item/PromotionCode'',
                               promotion_name  VARCHAR2 (500)
@@ -851,6 +853,14 @@ SELECT header.*,
                   <xsl:for-each select="PROMOTION_NAME">
                     <PA_POLE_DODATKOWE_T>
                       <NAZWA>ATRYBUT_T02</NAZWA>
+                      <WARTOSC>
+                        <xsl:value-of select="."/>
+                      </WARTOSC>
+                    </PA_POLE_DODATKOWE_T>
+                  </xsl:for-each>
+                  <xsl:for-each select="DESCRIPTION">
+                    <PA_POLE_DODATKOWE_T>
+                      <NAZWA>ATRYBUT_T03</NAZWA>
                       <WARTOSC>
                         <xsl:value-of select="."/>
                       </WARTOSC>
