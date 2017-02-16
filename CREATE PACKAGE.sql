@@ -1336,8 +1336,7 @@ IS
                                          FROM lg_sal_orders_it sori,
                                               lg_rzm_zadania_rezerwacji zare,
                                               lg_rzm_rezerwacje reze
-                                        WHERE     zare.zrre_id = sori.id
-                                              AND zare.zrre_typ = ''ZASI''
+                                        WHERE     zare.zrre_id(+) = sori.id
                                               AND reze.zare_id(+) = zare.id
                                               AND sori.document_id = sord.id) reservations
                           FROM lg_sal_orders sord
