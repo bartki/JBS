@@ -2,6 +2,19 @@ DECLARE
     v_order_clob   CLOB;
     v_xslt         CLOB;
 BEGIN
+
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,                                   
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+        VALUES (
+                   jg_sqre_seq.NEXTVAL,
+                   'CASH_RECEIPTS',                   
+                   'OUT/new_kp',
+                   'T',
+                   'IN');
+
     INSERT INTO jg_sql_repository (id,
                                    object_type,
                                    sql_query,
