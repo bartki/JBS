@@ -1170,6 +1170,156 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
+    FUNCTION import_cash_receipts (
+        p_operation_id   IN jg_input_log.id%TYPE,
+        p_object_type    IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        r_ksks        rk_ks_kasy%ROWTYPE;
+        v_konr_id     ap_kontrahenci.id%TYPE;
+        v_ksrk_guid   rk_ks_raporty_kasowe.guid%TYPE;
+        vr_document   api_rk_ks_ksdk.tr_document;
+        vr_payment    api_rk_ks_ksdk.tr_payment;
+        v_ksdk_guid   rk_ks_dokumenty_kasowe.guid%TYPE;
+        v_ksdk_id     rk_ks_dokumenty_kasowe.id%TYPE;
+        v_dosp_id     lg_sal_invoices.id%TYPE;
+        r_plat        lg_dosp_platnosci%ROWTYPE;
+    BEGIN
+        FOR r_ksdk
+            IN (SELECT cash_receipt.*
+                FROM jg_input_log LOG,
+                     XMLTABLE (
+                         '//NewKPConfirmation'
+                         PASSING xmltype (LOG.xml)
+                         COLUMNS description  VARCHAR2 (200)
+                                     PATH '/NewKPConfirmation/PaymentTitle',
+                                 cash_receipt_date  VARCHAR2 (30)
+                                     PATH '/NewKPConfirmation/DateOfCashCollection',
+                                 cash_paid  VARCHAR2 (30)
+                                     PATH '/NewKPConfirmation/CollectedAmountTotal',
+                                 konr_symbol  VARCHAR2 (30)
+                                     PATH '/NewKPConfirmation/CustomerID',
+                                 cash_register_symbol  VARCHAR2 (100)
+                                     PATH '/NewKPConfirmation/BillingAccountNumber',
+                                 cash_receipt_number_1  VARCHAR2 (100)
+                                     PATH '/NewKPConfirmation/KPNumber',
+                                 cash_receipt_number_2  VARCHAR2 (100)
+                                     PATH '/NewKPConfirmation/ExternalKPNumber')
+                     cash_receipt
+                WHERE LOG.id = p_operation_id)
+        LOOP
+            IF NOT rk_kska_sql.exists_by_symbol (
+                       p_symbol   => r_ksdk.cash_register_symbol)
+            THEN
+                pa_bledy.wywolaj_bld (
+                    p_nr_bledu      => -20800,
+                    p_tekst_bledu   =>    'Nie istnieje kasa o symbolu: '
+                                       || r_ksdk.cash_register_symbol);
+            END IF;
+
+
+            r_ksks :=
+                rk_kska_sql.rt (
+                    p_id      => rk_kska_sql.id_by_symbol (
+                                    p_symbol   => r_ksdk.cash_register_symbol),
+                    p_raise   => FALSE);
+
+            IF r_ksdk.konr_symbol IS NOT NULL
+            THEN
+                IF NOT lg_konr_sql.istnieje (p_symbol => r_ksdk.konr_symbol)
+                THEN
+                    pa_bledy.wywolaj_bld (
+                        p_nr_bledu      => -20800,
+                        p_tekst_bledu   =>    'Nie istnieje kontrahent o symbolu: '
+                                           || r_ksdk.konr_symbol);
+                END IF;
+
+                v_konr_id :=
+                    lg_konr_sql.id_uk1 (p_symbol => r_ksdk.konr_symbol);
+            END IF;
+
+            v_ksrk_guid :=
+                api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
+                                                    p_currency   => 'PLN');
+
+            IF v_ksrk_guid IS NULL
+            THEN
+                v_ksrk_guid :=
+                    api_rk_ks_ksrk.open_cash_report (
+                        p_kska_id     => r_ksks.id,
+                        p_currency    => 'PLN',
+                        p_date_from   => TRUNC (SYSDATE, 'DD'),
+                        p_date_to     => TRUNC (SYSDATE, 'DD'));
+            END IF;
+
+            vr_document.konr_id := v_konr_id;
+            set_log (r_ksdk.cash_paid);
+            vr_document.cash_paid :=
+                TO_NUMBER (REPLACE (r_ksdk.cash_paid, ',', '.'));
+            vr_document.date :=
+                TO_DATE (REPLACE (r_ksdk.cash_receipt_date, 'T', ' '),
+                         'YYYY-MM-DD hh24:mi:ss');
+            vr_document.description := r_ksdk.description;
+
+            v_ksdk_guid :=
+                api_rk_ks_ksdk.create_document (p_ksrk_guid   => v_ksrk_guid,
+                                                pr_document   => vr_document);
+
+            UPDATE rk_ks_dokumenty_kasowe
+               SET t_01 = r_ksdk.cash_receipt_number_1,
+                   t_02 = r_ksdk.cash_receipt_number_2
+             WHERE guid = v_ksdk_guid;
+
+
+            FOR r_payments
+                IN (SELECT cash_payments.*
+                    FROM jg_input_log LOG,
+                         XMLTABLE (
+                             '//NewKPConfirmation/Items/Item'
+                             PASSING xmltype (LOG.xml)
+                             COLUMNS payments_no VARCHAR2 (200) PATH '/Item/ItemNumber',
+                                     paid_amount VARCHAR2 (30) PATH '/Item/CollectedAmount',
+                                     invoice_symbol VARCHAR2 (30) PATH '/Item/InvoiceNumber')
+                         cash_payments
+                    WHERE LOG.id = p_operation_id)
+            LOOP
+                IF     r_payments.invoice_symbol IS NOT NULL
+                   AND lg_dosp_sql.istnieje (
+                           p_symbol   => r_payments.invoice_symbol)
+                THEN
+                    v_dosp_id :=
+                        lg_dosp_sql.id (p_symbol => r_payments.invoice_symbol);
+
+                    r_plat :=
+                        lg_dosp_plat_sql.rt (
+                            p_id   => lg_dosp_plat_sql.id_pierwszej_platnosci (
+                                         p_dosp_id   => v_dosp_id));
+
+                    vr_payment := NULL;
+
+                    vr_payment.symbol := r_plat.symbol_platnosci;
+                    vr_payment.guid := r_plat.guid;
+                    vr_payment.date := r_plat.data_platnosci;
+                    vr_payment.form := r_plat.foza_kod;
+                    vr_payment.paid_amount :=
+                        TO_NUMBER (
+                            REPLACE (r_payments.paid_amount, ',', '.'));
+                    api_rk_ks_ksdk.create_payment (
+                        p_ksdk_guid   => v_ksdk_guid,
+                        pr_payment    => vr_payment);
+                END IF;
+            END LOOP;
+
+            api_rk_ks_ksdk.approve_document (p_ksdk_guid => v_ksdk_guid);
+            v_ksdk_id := rk_ksdk_sql.id_dla_guid (p_guid => v_ksdk_guid);
+        END LOOP;
+
+        RETURN v_ksdk_id;
+    END;
+
+    ------------------------------------------------------------------------------------------------------------------------
+
     FUNCTION import_sale_order (
         p_operation_id   IN jg_output_log.id%TYPE,
         p_object_type    IN jg_sql_repository.object_type%TYPE)
@@ -1209,6 +1359,7 @@ IS
 
         v_xml :=
             transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
+
         v_wzrc_id :=
             lg_wzrc_sql.id (
                 p_wzorzec   => pa_xmltype.wartosc (v_xml,
@@ -1302,6 +1453,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE send_response
     IS
         ------------------------------------------------------------------------------------------------------------------------
@@ -1318,7 +1470,7 @@ IS
     BEGIN
         FOR r_inlo IN (SELECT *
                        FROM jg_input_log inlo
-                       WHERE inlo.xml_response IS NULL)
+                       WHERE LENGTH (inlo.xml_response) = 0)
         LOOP
             IF r_inlo.object_type = 'ORDER'
             THEN
@@ -1496,11 +1648,62 @@ IS
                             NULL;
                     END;
                 END IF;
+            ELSIF r_inlo.object_type = 'CASH_RECEIPTS'
+            THEN
+                v_oryginal_id := NULL;
+                v_sciezka := '/NewKPConfirmation/KPNumber';
+
+                BEGIN
+                    v_oryginal_id :=
+                        pa_xmltype.wartosc (px_xml      => xmltype (r_inlo.xml),
+                                            p_sciezka   => v_sciezka);
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        v_oryginal_id := 'TO_CHAR(NULL)';
+                END;
+
+
+                v_sql_query :=
+                       'SELECT '''
+                    || v_oryginal_id
+                    || ''' KPNumber,
+                               STATUS,
+                               TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
+                               TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
+                               FILE_NAME,
+                               ERROR ERROR_MESSAGE
+                          FROM jg_input_log inlo
+                         WHERE id ='
+                    || r_inlo.id;
+                set_log (v_sql_query);
+                v_xml_clob :=
+                    create_xml (v_sql_query,
+                                r_inlo.object_type || '_RESPONSE');
+
+                IF v_xml_clob IS NOT NULL
+                THEN
+                    BEGIN
+                        jg_output_sync.send_text_file_to_ftp (
+                            p_xml         => v_xml_clob,
+                            p_file_name   =>    '/IN/responses/new_kp/new_kp_'
+                                             || r_inlo.file_name);
+
+                        UPDATE jg_input_log
+                           SET xml_response = v_xml_clob
+                         WHERE id = r_inlo.id;
+                    EXCEPTION
+                        WHEN OTHERS
+                        THEN
+                            NULL;
+                    END;
+                END IF;
             END IF;
         END LOOP;
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE process (pr_operation IN jg_input_log%ROWTYPE)
     IS
         ------------------------------------------------------------------------------------------------------------------------
@@ -1525,6 +1728,12 @@ IS
                     import_sale_order (
                         p_operation_id   => pr_operation.id,
                         p_object_type    => pr_operation.object_type);
+            WHEN 'CASH_RECEIPTS'
+            THEN
+                v_object_id :=
+                    import_cash_receipts (
+                        p_operation_id   => pr_operation.id,
+                        p_object_type    => pr_operation.object_type);
         END CASE;
 
         save_result (p_inlo_id     => pr_operation.id,
@@ -1533,6 +1742,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE get_from_ftp
     IS
         ------------------------------------------------------------------------------------------------------------------------
@@ -1673,6 +1883,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE process_all
     IS
     ------------------------------------------------------------------------------------------------------------------------
@@ -1703,10 +1914,9 @@ IS
         send_response;
     END;
 ------------------------------------------------------------------------------------------------------------------------
+
 END;
 /
-
-
 CREATE OR REPLACE PACKAGE jg_obop_def IS
 ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE Add_Operation (
