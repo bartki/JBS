@@ -1170,7 +1170,20 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION to_money (p_value VARCHAR2)
+        RETURN NUMBER
+    IS
+        v_value   NUMBER (10, 2);
+    BEGIN
+        SELECT TO_NUMBER (REGEXP_REPLACE (p_value, '[,.]', TRIM (VALUE)))
+          INTO v_value
+          FROM nls_session_parameters
+         WHERE parameter = 'NLS_NUMERIC_CHARACTERS';
 
+        RETURN ROUND (v_value, 2);
+    END;
+
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_cash_receipts (
         p_operation_id   IN jg_input_log.id%TYPE,
         p_object_type    IN jg_sql_repository.object_type%TYPE)
@@ -1185,6 +1198,7 @@ IS
         v_ksdk_id     rk_ks_dokumenty_kasowe.id%TYPE;
         v_dosp_id     lg_sal_invoices.id%TYPE;
         r_plat        lg_dosp_platnosci%ROWTYPE;
+        r_ksrk        rk_ks_raporty_kasowe%ROWTYPE;
     BEGIN
         FOR r_ksdk
             IN (SELECT cash_receipt.*
@@ -1213,7 +1227,7 @@ IS
                        p_symbol   => r_ksdk.cash_register_symbol)
             THEN
                 pa_bledy.wywolaj_bld (
-                    p_nr_bledu      => -20800,
+                    p_nr_bledu      => -20001,
                     p_tekst_bledu   =>    'Nie istnieje kasa o symbolu: '
                                        || r_ksdk.cash_register_symbol);
             END IF;
@@ -1230,7 +1244,7 @@ IS
                 IF NOT lg_konr_sql.istnieje (p_symbol => r_ksdk.konr_symbol)
                 THEN
                     pa_bledy.wywolaj_bld (
-                        p_nr_bledu      => -20800,
+                        p_nr_bledu      => -20001,
                         p_tekst_bledu   =>    'Nie istnieje kontrahent o symbolu: '
                                            || r_ksdk.konr_symbol);
                 END IF;
@@ -1239,37 +1253,59 @@ IS
                     lg_konr_sql.id_uk1 (p_symbol => r_ksdk.konr_symbol);
             END IF;
 
-            v_ksrk_guid :=
-                api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
-                                                    p_currency   => 'PLN');
+            FOR r_exists IN (SELECT symbol_dokumentu
+                             FROM rk_ks_dokumenty_kasowe
+                             WHERE t_02 = r_ksdk.cash_receipt_number_2)
+            LOOP
+                pa_bledy.wywolaj_bld (
+                    p_nr_bledu      => -20001,
+                    p_tekst_bledu   =>    'Dokument o symbolu: '
+                                       || r_ksdk.cash_receipt_number_2
+                                       || ' znajduje się już w kasie. Otrzymał symbol: '
+                                       || r_exists.symbol_dokumentu);
+            END LOOP;
 
-            IF v_ksrk_guid IS NULL
-            THEN
-                v_ksrk_guid :=
-                    api_rk_ks_ksrk.open_cash_report (
-                        p_kska_id     => r_ksks.id,
-                        p_currency    => 'PLN',
-                        p_date_from   => TRUNC (SYSDATE, 'DD'),
-                        p_date_to     => TRUNC (SYSDATE, 'DD'));
-            END IF;
+
 
             vr_document.konr_id := v_konr_id;
-            set_log (r_ksdk.cash_paid);
-            vr_document.cash_paid :=
-                TO_NUMBER (REPLACE (r_ksdk.cash_paid, ',', '.'));
+            vr_document.cash_paid := to_money (r_ksdk.cash_paid);
             vr_document.date :=
                 TO_DATE (REPLACE (r_ksdk.cash_receipt_date, 'T', ' '),
                          'YYYY-MM-DD hh24:mi:ss');
             vr_document.description := r_ksdk.description;
+            v_ksrk_guid :=
+                api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
+                                                    p_currency   => 'PLN');
+
+
+            IF v_ksrk_guid IS NOT NULL
+            THEN
+                r_ksrk :=
+                    rk_ksrk_sql.rt (rk_ksrk_sql.id_by_guid (v_ksrk_guid));
+
+                IF r_ksrk.data_do < TRUNC (vr_document.date)
+                THEN
+                    api_rk_ks_ksrk.close_cash_report (p_guid => v_ksrk_guid);
+                    v_ksrk_guid :=
+                        api_rk_ks_ksrk.open_cash_report (
+                            p_kska_id     => r_ksks.id,
+                            p_currency    => 'PLN',
+                            p_date_from   => TRUNC (vr_document.date),
+                            p_date_to     => TRUNC (vr_document.date));
+                END IF;
+            ELSE
+                v_ksrk_guid :=
+                    api_rk_ks_ksrk.open_cash_report (
+                        p_kska_id     => r_ksks.id,
+                        p_currency    => 'PLN',
+                        p_date_from   => TRUNC (vr_document.date),
+                        p_date_to     => TRUNC (vr_document.date));
+            END IF;
 
             v_ksdk_guid :=
                 api_rk_ks_ksdk.create_document (p_ksrk_guid   => v_ksrk_guid,
                                                 pr_document   => vr_document);
 
-            UPDATE rk_ks_dokumenty_kasowe
-               SET t_01 = r_ksdk.cash_receipt_number_1,
-                   t_02 = r_ksdk.cash_receipt_number_2
-             WHERE guid = v_ksdk_guid;
 
 
             FOR r_payments
@@ -1303,13 +1339,28 @@ IS
                     vr_payment.date := r_plat.data_platnosci;
                     vr_payment.form := r_plat.foza_kod;
                     vr_payment.paid_amount :=
-                        TO_NUMBER (
-                            REPLACE (r_payments.paid_amount, ',', '.'));
+                        to_money (r_payments.paid_amount);
+
+                    api_rk_ks_ksdk.create_payment (
+                        p_ksdk_guid   => v_ksdk_guid,
+                        pr_payment    => vr_payment);
+                ELSE
+                    vr_payment := NULL;
+
+
+                    vr_payment.symbol := r_payments.invoice_symbol;
+                    vr_payment.paid_amount :=
+                        to_money (r_payments.paid_amount);
                     api_rk_ks_ksdk.create_payment (
                         p_ksdk_guid   => v_ksdk_guid,
                         pr_payment    => vr_payment);
                 END IF;
             END LOOP;
+
+            UPDATE rk_ks_dokumenty_kasowe
+               SET t_01 = r_ksdk.cash_receipt_number_1,
+                   t_02 = r_ksdk.cash_receipt_number_2
+             WHERE guid = v_ksdk_guid;
 
             api_rk_ks_ksdk.approve_document (p_ksdk_guid => v_ksdk_guid);
             v_ksdk_id := rk_ksdk_sql.id_dla_guid (p_guid => v_ksdk_guid);
