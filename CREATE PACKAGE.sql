@@ -1270,8 +1270,8 @@ IS
             vr_document.konr_id := v_konr_id;
             vr_document.cash_paid := to_money (r_ksdk.cash_paid);
             vr_document.date :=
-                TO_DATE (REPLACE (r_ksdk.cash_receipt_date, 'T', ' '),
-                         'YYYY-MM-DD hh24:mi:ss');
+                trunc(TO_DATE (REPLACE (r_ksdk.cash_receipt_date, 'T', ' '),
+                         'YYYY-MM-DD hh24:mi:ss'));
             vr_document.description := r_ksdk.description;
             v_ksrk_guid :=
                 api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
