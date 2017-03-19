@@ -27,30 +27,30 @@ BEGIN
                    'INVOICES_PAYMENTS',
                    '
 SELECT rndo.symbol_dokumentu invoice_number,
-       rndo.data_dokumentu invoice_date,
-       rndo.termin_platnosci due_date,
-       rndo.forma_platnosci payment_form,
-       konr.symbol payer_symbol,
-       konr.nazwa payer_name,
-       jg_output_sync.format_number (rndo.wartosc_dok_z_kor_wwb, 2) total,
-       jg_output_sync.format_number (rndo.poz_do_zaplaty_dok_z_kor_wwb, 2)
-           amount_left,
-       CURSOR (
-           SELECT rnwp.symbol_dokumentu payment_doc_number,
-                  rnwp.data_dokumentu payment_date,
-                  jg_output_sync.format_number (rnwp.zaplata_wwb, 2)
-                      amount_paid
-             FROM rk_rozr_nal_dok_plat_rk_vw rnwp
-            WHERE     rnwp.rndo_id = rndo.rndo_id
-                  AND rnwp.zaplata_wwb IS NOT NULL
-                  AND rnwp.typ = ''P'')
-           payments_details
-  FROM rk_rozr_nal_dokumenty_vw rndo, ap_kontrahenci konr
- WHERE     konr.id = rndo.konr_id
-       AND rndo.rnwp_rnwp_id IS NULL
-       AND rndo.typ IN (''FAK'', ''KOR'')
-       AND rndo.poz_do_zaplaty_dok_z_kor_wwb > 0
-       AND rndo.rndo_id IN (:p_id)
+         rndo.data_dokumentu invoice_date,
+         rndo.termin_platnosci due_date,
+         rndo.forma_platnosci payment_form,
+         konr.symbol payer_symbol,
+         konr.nazwa payer_name,
+         jg_output_sync.format_number (rndo.wartosc_dok_z_kor_wwb, 2) total,
+         jg_output_sync.format_number (rndo.poz_do_zaplaty_dok_z_kor_wwb, 2)
+             amount_left,
+         CURSOR (
+             SELECT rnwp.symbol_dokumentu payment_doc_number,
+                    rnwp.data_dokumentu payment_date,
+                    jg_output_sync.format_number (rnwp.zaplata_wwb, 2)
+                        amount_paid
+               FROM rk_rozr_nal_dok_plat_rk_vw rnwp
+              WHERE     rnwp.rndo_id = rndo.rndo_id
+                    AND rnwp.zaplata_wwb IS NOT NULL
+                    AND rnwp.typ = ''P'')
+             payments_details
+    FROM rk_rozr_nal_dokumenty_vw rndo, ap_kontrahenci konr
+   WHERE     konr.id = rndo.konr_id
+         AND rndo.rnwp_rnwp_id IS NULL
+         AND rndo.typ IN (''FAK'', ''KOR'')
+         and rndo.poz_do_zaplaty_dok_z_kor_wwb > 0
+         AND rndo.rndo_id IN ( :p_id)
 GROUP BY rndo.symbol_dokumentu,
          rndo.termin_platnosci,
          rndo.forma_platnosci,
@@ -60,7 +60,7 @@ GROUP BY rndo.symbol_dokumentu,
          rndo.wartosc_dok_z_kor_wwb,
          rndo.poz_do_zaplaty_dok_z_kor_wwb,
          rndo.rndo_id,
-         rndo.data_dokumentu',
+          rndo.data_dokumentu',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
@@ -365,161 +365,114 @@ GROUP BY rndo.symbol_dokumentu,
                    'OUT');
 
     v_order_clob :=
-        '/* Formatted on 2017-02-15 20:13:07 (QP5 v5.291) */
-SELECT header.*,
-       sord.guid,
-       TRUNC (
-           TO_DATE (header.order_issue_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS''))
-           order_issue_date,
-       TRUNC (
-           TO_DATE (header.requested_delivery_date_bc,
-                    ''YYYY-MM-DD"T"HH24:MI:SS''))
-           requested_delivery_date,
-       wzrc.document_type document_type,
-       wzrc.pricing_type pricing_type,
-       pa_firm_sql.kod (wzrc.firm_id) company_code,
-       wzrc.place_of_issue place_of_issue,
-       NVL (wzrc.base_currency, wzrc.currency) currency,
-       NVL (header.payment_date, wzrc.payment_days) payment_days,
-       pusp.kod pusp_kod,
-       NVL (header.net_value * (header.order_discount / 100), 0)
-           order_discount_value,
-       CURSOR (
-           SELECT konr.symbol,
-                  konr.nazwa,
-                  konr.skrot,
-                  konr.nip,
-                  adge.miejscowosc,
-                  adge.kod_pocztowy,
-                  adge.ulica,
-                  adge.nr_domu,
-                  adge.nr_lokalu,
-                  adge.poczta
-             FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
-            WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
-                  AND konr.id = wzrc.issuer_id)
-           sprzedawca,
-       CURSOR (
-           SELECT konr.symbol,
-                  konr.nazwa,
-                  konr.skrot,
-                  konr.nip,
-                  adge.miejscowosc,
-                  adge.kod_pocztowy,
-                  adge.ulica,
-                  adge.nr_domu,
-                  adge.nr_lokalu,
-                  adge.poczta
-             FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
-            WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
-                  AND konr.symbol = header.seller_buyer_id)
-           platnik,
-       CURSOR (
-           SELECT konr.symbol,
-                  konr.nazwa,
-                  konr.skrot,
-                  konr.nip,
-                  adge.miejscowosc,
-                  adge.kod_pocztowy,
-                  adge.ulica,
-                  adge.nr_domu,
-                  adge.nr_lokalu,
-                  adge.poczta
-             FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
-            WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
-                  AND konr.symbol = header.receiver_id)
-           odbiorca,
-       CURSOR (
-           SELECT item_xml.*,
-                  sori.guid,
-                  (item_xml.unit_price_base - item_xml.unit_price_value)
-                      discount_value,
-                  inma.nazwa commodity_name,
-                  inma.jdmr_nazwa_pdst_sp jdmr_nazwa,
-                  api_rk_stva.kod (inma.stva_id) inma_stva_code,
-                  NVL (wzrc.base_currency, wzrc.currency) currency
-             FROM jg_input_log log1,
-                  ap_indeksy_materialowe inma,
-                  XMLTABLE (
-                      ''//Order/OrderDetail/Item''
-                      PASSING xmltype (log1.xml)
-                      COLUMNS item_num  VARCHAR2 (30)
-                                  PATH ''/Item/ItemNum'',
-                              seller_item_id  VARCHAR2 (30)
-                                  PATH ''/Item/SellerItemID'',
-                              name  VARCHAR2 (70)
-                                  PATH ''/Item/Name'',
-                              unit_of_measure  VARCHAR2 (30)
-                                  PATH ''/Item/UnitOfMeasure'',
-                              quantity_value  VARCHAR2 (30)
-                                  PATH ''/Item/QuantityValue'',
-                              tax_percent  VARCHAR2 (30)
-                                  PATH ''/Item/TaxPercent'',
-                              unit_price_value  VARCHAR2 (30)
-                                  PATH ''/Item/UnitPriceValue'',
-                              unit_price_base  VARCHAR2 (30)
-                                  PATH ''/Item/UnitPriceBase'',
-                              unit_discount_value  VARCHAR2 (30)
-                                  PATH ''/Item/UnitDiscountValue'',
-                              unit_discount  VARCHAR2 (30)
-                                  PATH ''/Item/UnitDiscount'',
-                              description     VARCHAR2 (500)
-                                  PATH ''/Item/Description'',
-                              promotion_code  VARCHAR2 (500)
-                                  PATH ''/Item/PromotionCode'',
-                              promotion_name  VARCHAR2 (500)
-                                  PATH ''/Item/PromotionName'') item_xml,
-                  lg_sal_orders_it sori
-            WHERE     log1.id = LOG.id
-                  AND inma.indeks = item_xml.seller_item_id
-                  AND (    sori.document_id(+) = sord.id
-                       AND sori.item_symbol(+) = item_xml.seller_item_id)
-                  AND sori.ordinal(+) = item_xml.item_num)
-           items
-  FROM jg_input_log LOG,
-       lg_documents_templates wzrc,
-       lg_punkty_sprzedazy pusp,
-       XMLTABLE (
-           ''//Order''
-           PASSING xmltype (LOG.xml)
-           COLUMNS order_number  VARCHAR2 (30)
-                       PATH ''/Order/OrderHeader/OrderNumber'',
-                   order_pattern  VARCHAR2 (100)
-                       PATH ''/Order/OrderHeader/OrderPattern'',
-                   order_type  VARCHAR2 (1)
-                       PATH ''/Order/OrderHeader/OrderType'',
-                   order_issue_date_bc  VARCHAR2 (30)
-                       PATH ''/Order/OrderHeader/OrderIssueDate'',
-                   requested_delivery_date_bc  VARCHAR2 (30)
-                       PATH ''/Order/OrderHeader/RequestedDeliveryDate'',
-                   note  VARCHAR2 (100)
-                       PATH ''/Order/OrderHeader/Comment'',
-                   payment_date  VARCHAR2 (30)
-                       PATH ''/Order/OrderHeader/PaymentDate'',
-                   order_discount  VARCHAR2 (1)
-                       PATH ''/Order/OrderHeader/OrderDiscount'',
-                   payment_method_code  VARCHAR2 (6)
-                       PATH ''/Order/OrderHeader/PaymentMethod/Code'',
-                   transportation_code  VARCHAR2 (3)
-                       PATH ''/Order/OrderHeader/Transportation/Code'',
-                   seller_buyer_id  VARCHAR2 (30)
-                       PATH ''/Order/OrderParty/BuyerParty/SellerBuyerID'',
-                   seller_contact_tel  VARCHAR2 (30)
-                       PATH ''/Order/OrderParty/BuyerParty/Contact/Tel'',
-                   receiver_id  VARCHAR2 (30)
-                       PATH ''/Order/OrderParty/ShipToParty/CustomerNumber'',
-                   sr_party_description  VARCHAR2 (30)
-                       PATH ''/Order/OrderParty/SRParty/Description'',
-                   net_value  VARCHAR2 (30)
-                       PATH ''/Order/OrderSummary/TotalNetAmount'',
-                   gross_value  VARCHAR2 (30)
-                       PATH ''/Order/OrderSummary/TotalGrossAmount'') header,
-       lg_sal_orders sord
- WHERE     pusp.id = wzrc.pusp_id
-       AND wzrc.pattern = header.order_pattern
-       AND (    sord.doc_symbol_rcv(+) = header.order_number
-            AND sord.payer_symbol(+) = header.seller_buyer_id)
-       AND LOG.id = :p_operation_id';
+        'SELECT header.*,
+                sord.guid,
+                            TRUNC(TO_DATE(header.order_issue_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS'')) order_issue_date,
+                            TRUNC(TO_DATE(header.requested_delivery_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS'')) requested_delivery_date,
+                            wzrc.document_type document_type,
+                            wzrc.pricing_type pricing_type,
+                            pa_firm_sql.kod (wzrc.firm_id) company_code,
+                            wzrc.place_of_issue place_of_issue,
+                            NVL (wzrc.base_currency, wzrc.currency) currency,
+                            NVL(header.payment_date, wzrc.payment_days) payment_days,
+                            pusp.kod pusp_kod,
+                            NVL(header.net_value * (header.order_discount/ 100), 0) order_discount_value,
+                            CURSOR ( SELECT konr.symbol,
+                                            konr.nazwa,
+                                            konr.skrot,
+                                            konr.nip,
+                                            adge.miejscowosc,
+                                            adge.kod_pocztowy,
+                                            adge.ulica,
+                                            adge.nr_domu,
+                                            adge.nr_lokalu,
+                                            adge.poczta
+                                       FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
+                                      WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
+                                            AND konr.id = wzrc.issuer_id) sprzedawca,
+                            CURSOR ( SELECT konr.symbol,
+                                            konr.nazwa,
+                                            konr.skrot,
+                                            konr.nip,
+                                            adge.miejscowosc,
+                                            adge.kod_pocztowy,
+                                            adge.ulica,
+                                            adge.nr_domu,
+                                            adge.nr_lokalu,
+                                            adge.poczta
+                                       FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
+                                      WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
+                                            AND konr.symbol = header.seller_buyer_id) platnik,
+                            CURSOR ( SELECT konr.symbol,
+                                            konr.nazwa,
+                                            konr.skrot,
+                                            konr.nip,
+                                            adge.miejscowosc,
+                                            adge.kod_pocztowy,
+                                            adge.ulica,
+                                            adge.nr_domu,
+                                            adge.nr_lokalu,
+                                            adge.poczta
+                                       FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
+                                      WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
+                                            AND konr.symbol = header.receiver_id ) odbiorca,
+                            CURSOR ( SELECT item_xml.*,
+                                            sori.guid,
+                                            (item_xml.unit_price_base - item_xml.unit_price_value) discount_value,
+                                            inma.nazwa commodity_name,
+                                            inma.jdmr_nazwa_pdst_sp jdmr_nazwa,
+                                            api_rk_stva.kod (inma.stva_id) inma_stva_code,
+                                            NVL (wzrc.base_currency, wzrc.currency) currency
+                                       FROM jg_input_log log1,
+                                            ap_indeksy_materialowe inma,
+                                            XMLTABLE ( ''//Order/OrderDetail/Item''
+                                                       PASSING xmltype (log1.xml)
+                                                       COLUMNS item_num               VARCHAR2 (30) PATH ''/Item/ItemNum'',
+                                                               seller_item_id         VARCHAR2 (30) PATH ''/Item/SellerItemID'',
+                                                               name                   VARCHAR2 (70) PATH ''/Item/Name'',                                                               
+                                                               unit_of_measure        VARCHAR2 (30) PATH ''/Item/UnitOfMeasure'',                                                               
+                                                               quantity_value         VARCHAR2 (30) PATH ''/Item/QuantityValue'',
+                                                               tax_percent            VARCHAR2 (30) PATH ''/Item/TaxPercent'',
+                                                               unit_price_value       VARCHAR2 (30) PATH ''/Item/UnitPriceValue'',
+                                                               unit_price_base        VARCHAR2 (30) PATH ''/Item/UnitPriceBase'',
+                                                               unit_discount_value    VARCHAR2 (30) PATH ''/Item/UnitDiscountValue'',
+                                                               unit_discount          VARCHAR2 (30) PATH ''/Item/UnitDiscount'',
+                                                               description                  VARCHAR2(500) PATH ''/Item/Description'',
+                                                               promotion_code         VARCHAR2 (500) PATH ''/Item/PromotionCode'',
+                                                               promotion_name         VARCHAR2 (500) PATH ''/Item/PromotionName'') item_xml,
+                                            lg_sal_orders_it sori                                                           
+                                      WHERE     log1.id = LOG.id
+                                            AND inma.indeks = item_xml.seller_item_id
+                                            AND (    sori.document_id (+) = sord.id
+                                                 AND sori.item_symbol (+) = item_xml.seller_item_id)
+                                                 AND sori.ordinal (+) = item_xml.item_num) items
+                       FROM jg_input_log LOG,
+                            lg_documents_templates wzrc,
+                            lg_punkty_sprzedazy pusp,
+                            XMLTABLE ( ''//Order''
+                                       PASSING xmltype (LOG.xml)
+                                       COLUMNS order_number               VARCHAR2 (30)      PATH ''/Order/OrderHeader/OrderNumber'',
+                                              order_pattern                         VARCHAR2 (100)     PATH ''/Order/OrderHeader/OrderPattern'',
+                                              order_type                              VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderType'',
+                                              order_issue_date_bc              VARCHAR2 (30)      PATH ''/Order/OrderHeader/OrderIssueDate'',
+                                              requested_delivery_date_bc  VARCHAR2 (30)      PATH ''/Order/OrderHeader/RequestedDeliveryDate'',
+                                              note                                         VARCHAR2 (100)     PATH ''/Order/OrderHeader/Comment'',
+                                              payment_date                         VARCHAR2(30)     PATH ''/Order/OrderHeader/PaymentDate'',
+                                              order_discount                        VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderDiscount'',                                               
+                                              payment_method_code          VARCHAR2 (6)       PATH ''/Order/OrderHeader/PaymentMethod/Code'',
+                                              transportation_code               VARCHAR2 (3)       PATH ''/Order/OrderHeader/Transportation/Code'',                                               
+                                              seller_buyer_id                       VARCHAR2 (30)      PATH ''/Order/OrderParty/BuyerParty/SellerBuyerID'',
+                                              seller_contact_tel                   VARCHAR2 (30)      PATH ''/Order/OrderParty/BuyerParty/Contact/Tel'',
+                                              receiver_id                              VARCHAR2(30)       PATH ''/Order/OrderParty/ShipToParty/CustomerNumber'',
+                                              sr_party_description              VARCHAR2 (30)      PATH ''/Order/OrderParty/SRParty/Description'',
+                                              net_value                               VARCHAR2(30)        PATH ''/Order/OrderSummary/TotalNetAmount'',
+                                              gross_value                            VARCHAR2(30)        PATH ''/Order/OrderSummary/TotalGrossAmount'' ) header,
+                            lg_sal_orders sord
+                      WHERE     pusp.id = wzrc.pusp_id
+                            AND wzrc.pattern = header.order_pattern
+                            AND (    sord.doc_symbol_rcv(+) = header.order_number
+                                 AND sord.payer_symbol(+) = header.seller_buyer_id)
+                            AND LOG.id = :p_operation_id';
 
     v_xslt :=
         '<?xml version="1.0" encoding="UTF-8"?>
@@ -1460,7 +1413,7 @@ SELECT header.*,
            FROM lg_upusty_tabelaryczne upta
                 JOIN lg_kryteria_wykorzystane krwy ON upta.id = krwy.upta_id
                 JOIN lg_wartosci_kryt_wyk wakw ON wakw.krwy_id = krwy.id
-          WHERE upta.symbol LIKE 'UG%'),
+          WHERE upta.symbol LIKE ''UG%''),
      upta_koup
      AS (SELECT a.upta_id, koup.upust_procentowy
            FROM (SELECT *
@@ -1468,7 +1421,7 @@ SELECT header.*,
                         PIVOT
                             (MAX (wakw_id) wakw_id
                             FOR typ_wykorzystania
-                            IN ('W' AS "W", 'K' AS "K"))) a
+                            IN (''W'' AS "W", ''K'' AS "K"))) a
                 JOIN lg_komorki_upustow koup
                     ON     koup.wakw_id_kolumna = a.k_wakw_id
                        AND koup.wakw_id_wiersz = a.w_wakw_id)
@@ -1478,7 +1431,7 @@ SELECT upta.symbol discount_number,
        gras.kod commodity_group_code,
        grod.grupa reciever_group,
        prup.data_od date_from,
-       NVL (prup.data_do, TO_DATE ('2049/12/31', 'YYYY/MM/DD')) date_to,
+       NVL (prup.data_do, TO_DATE (''2049/12/31'', ''YYYY/MM/DD'')) date_to,
        jg_output_sync.format_number (
            NVL (upko.upust_procentowy, prup.upust_procentowy),
            100)
@@ -1580,20 +1533,23 @@ GROUP BY maga.kod, maga.nazwa',
        umsp.data_do date_to,
        wzrc.nazwa contract_destination,
        jg_output_sync.format_number (umsp1.contract_value, 10) contract_value,
-       jg_output_sync.format_number (umsp1.splata, 10)
+       jg_output_sync.format_number (
+          umsp1.splata,
+           10)
            contract_value_realized,
        CASE
            WHEN   umsp1.splata
                 -   (umsp1.contract_value / umsp1.duration)
                   * (FLOOR (MONTHS_BETWEEN (SYSDATE, umsp1.date_from))) < 0
            THEN
-               ''T''
+              ''T''
            ELSE
                ''N''
        END
            delayed,
        CASE
-           WHEN   (umsp1.contract_value / umsp1.duration) * months_passed
+           WHEN     (umsp1.contract_value / umsp1.duration)
+                  * months_passed
                 - umsp1.splata > (umsp1.contract_value / umsp1.duration) * 3
            THEN
                ''N''
@@ -1601,23 +1557,15 @@ GROUP BY maga.kod, maga.nazwa',
                ''T''
        END
            can_skip_repayment,
-       ROUND (umsp1.contract_value / umsp1.duration, 2)
-           AS monthly_installment,
-       ROUND (
-           GREATEST (
-               umsp1.splata - umsp1.contract_value,
-               LEAST (
-                   0,
-                     umsp1.splata
-                   - umsp1.contract_value / umsp1.duration * months_passed)),
-           2)
-           debt
+  round(umsp1.contract_value/umsp1.duration,2) as monthly_installment,
+  round(greatest(umsp1.splata-umsp1.contract_value,least(0,umsp1.splata - umsp1.contract_value/umsp1.duration*months_passed)),2) debt
   FROM lg_ums_umowy_sprz umsp,
        ap_kontrahenci konr,
        lg_wzorce wzrc,
        (SELECT id,
-               (SELECT lg_ums_umsi_def.wartosc (umsi.id)
-                  FROM lg_ums_umowy_sprz_it umsi
+                (SELECT Lg_Ums_Umsi_Def.Wartosc(UMSI.ID)
+                  FROM 
+                       lg_ums_umowy_sprz_it umsi
                  WHERE umsi.umsp_id = umsp.id)
                    contract_value,
                (SELECT NVL (SUM (umru.wartosc), 0)
@@ -1627,23 +1575,14 @@ GROUP BY maga.kod, maga.nazwa',
                NVL (ADD_MONTHS (umsp.data_do, -umsp.atrybut_n01) + 1,
                     umsp.data_od)
                    AS date_from,
-               NVL (umsp.atrybut_n01,
-                    ROUND (MONTHS_BETWEEN (umsp.data_do, umsp.data_od)))
-                   duration,
-               FLOOR (
-                   MONTHS_BETWEEN (
-                       SYSDATE,
-                       NVL (ADD_MONTHS (umsp.data_do, -umsp.atrybut_n01) + 1,
-                            umsp.data_od)))
-                   AS months_passed
+               nvl(umsp.atrybut_n01,round(months_between(umsp.data_do,umsp.data_od))) duration,
+               floor(months_between(sysdate,NVL (ADD_MONTHS (umsp.data_do, -umsp.atrybut_n01) + 1,
+                    umsp.data_od))) as months_passed
           FROM lg_ums_umowy_sprz umsp
-         WHERE     umsp.data_wystawienia >=
-                       TO_DATE (''2016/01/01'', ''YYYY/MM/DD'')
-               AND umsp.zamknieta = ''N'') umsp1
- WHERE     konr.id = umsp.konr_id_pl
-       AND wzrc.id = umsp.wzrc_id
-       AND umsp.id = umsp1.id
-       AND umsp.id IN (:p_id)',
+          WHERE umsp.data_wystawienia >= to_date(''2016/01/01'',''YYYY/MM/DD'')
+          AND umsp.zamknieta = ''N''
+          ) umsp1
+ WHERE konr.id = umsp.konr_id_pl AND wzrc.id = umsp.wzrc_id AND umsp.id = umsp1.id  AND umsp.id IN ( :p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
