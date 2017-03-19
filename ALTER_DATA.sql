@@ -2048,7 +2048,9 @@ SELECT konr.symbol contractors_id,
 END;
 /
 BEGIN
-    DBMS_SCHEDULER.DROP_JOB(job_name=> 'INTEGRACJAINFINITE');
+    lg_sql_wykonywanie.wykonaj_ddl (
+        p_wyrazenie   => 'begin DBMS_SCHEDULER.DROP_JOB(job_name=> ''INTEGRACJAINFINITE''); end;',
+        p_nr_bledu    => -27475);
     DBMS_SCHEDULER.create_job (
         '"INTEGRACJAINFINITE"',
         job_type              => 'PLSQL_BLOCK',
@@ -2066,5 +2068,7 @@ BEGIN
         comments              => NULL);
     DBMS_SCHEDULER.enable ('"INTEGRACJAINFINITE"');
     COMMIT;
-END; 
+END;
+/
+
 
