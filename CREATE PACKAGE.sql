@@ -1129,20 +1129,36 @@ IS
         RETURN jg_input_log.object_id%TYPE
     IS
         ------------------------------------------------------------------------------------------------------------------------
-        v_xml                XMLTYPE;
-        v_core_ns   CONSTANT VARCHAR2 (200)
-            := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"' ;
+        v_xml                XMLTYPE;        
+        v_core_ns   CONSTANT VARCHAR2 (200):= 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"';
+        v_okreg_id           ap_okregi_sprzedazy.id%TYPE;
+        v_symbol             ap_kontrahenci.symbol%TYPE;
     BEGIN
         v_xml := transform_xml (p_xml => p_xml, p_object_type => p_object_type);
+        
+        v_symbol := pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns);
+        
+        IF v_symbol IS NULL
+        THEN
+            SELECT 'NKKX' || jbs_mp_nkk_kln.NEXTVAL
+              INTO v_symbol
+              FROM dual;
+        END IF;
+        
+        v_xml := xmltype.APPENDCHILDXML (v_xml, 'PA_KONTRAHENT_TK', xmltype ('<SYMBOL>' || v_symbol || '</SYMBOL>'), v_core_ns);
+        
+        v_okreg_id := pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SALES_REPRESENTATIVE_ID', v_core_ns);
+        
+        IF v_okreg_id IS NOT NULL
+        THEN
+            v_xml := xmltype.APPENDCHILDXML (v_xml, 'PA_KONTRAHENT_TK', xmltype ('<OKREG_SPRZEDAZY>' || lg_okgi_sql.RT(p_id=> v_okreg_id).symbol || '</OKREG_SPRZEDAZY>'), v_core_ns);
+        END IF;
+
         apix_lg_konr.update_obj (p_konr                           => v_xml.getclobval,
                                  p_update_limit                   => FALSE,
                                  p_update_addresses_by_konr_mdf   => TRUE);
 
-        RETURN lg_konr_sql.id (
-                   p_symbol   => pa_xmltype.wartosc (
-                                    v_xml,
-                                    '/PA_KONTRAHENT_TK/SYMBOL',
-                                    v_core_ns));
+        RETURN lg_konr_sql.id (p_symbol => v_symbol);
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
