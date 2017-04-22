@@ -1056,9 +1056,9 @@ GROUP BY rndo.symbol_dokumentu,
       <xsl:for-each select="NewCustomer">
         <xsl:for-each select="BasicData">
           <xsl:for-each select="MobizID">
-            <SYMBOL>
+            <MOBIZ_ID>
               <xsl:value-of select="."/>
-            </SYMBOL>
+            </MOBIZ_ID>
           </xsl:for-each>
           <xsl:for-each select="Name">
             <NAZWA>
@@ -1114,18 +1114,17 @@ GROUP BY rndo.symbol_dokumentu,
                 </VARCHAR2>
               </xsl:for-each>
             </ADRESY_EMAIL>
-            <RegionID>080</RegionID>
-            <ProvinceID>450</ProvinceID>
           </ADRES>
-          <ClassID>Detal</ClassID>
-          <Profile>Reseller</Profile>
-          <ContactPerson>Tomasz Wspaniały</ContactPerson>
-          <ChainID>123</ChainID>
         </xsl:for-each>
-        <AdditionalData>
-          <SalesRepresentativeID>5235</SalesRepresentativeID>
-        </AdditionalData>
-        <PLATNIK_VAT>T</PLATNIK_VAT>
+        <xsl:for-each select="AdditionalData">
+          <xsl:for-each select="SalesRepresentativeID">
+          <SALES_REPRESENTATIVE_ID>
+             <xsl:value-of select="."/>
+          </SALES_REPRESENTATIVE_ID>
+          </xsl:for-each>
+         </xsl:for-each>
+        <PLATNIK_VAT>N</PLATNIK_VAT>
+        <POTENTIAL>T</POTENTIAL>
         <BLOKADA_ZAKUPU>N</BLOKADA_ZAKUPU>
         <RODZAJ_DATY_WAR_HANDL_FAKT>S</RODZAJ_DATY_WAR_HANDL_FAKT>
         <RODZAJ_DATY_WAR_HANDL_ZAM>W</RODZAJ_DATY_WAR_HANDL_ZAM>
@@ -1243,15 +1242,15 @@ GROUP BY rndo.symbol_dokumentu,
             <RegionID>080</RegionID>
             <ProvinceID>450</ProvinceID>
           </ADRES>
-          <ClassID>Detal</ClassID>
-          <Profile>Reseller</Profile>
-          <ContactPerson>Tomasz Wspaniały</ContactPerson>
-          <ChainID>123</ChainID>
+        <xsl:for-each select="AdditionalData">
+          <xsl:for-each select="SalesRepresentativeID">
+          <SALES_REPRESENTATIVE_ID>
+             <xsl:value-of select="."/>
+          </SALES_REPRESENTATIVE_ID>
+          </xsl:for-each>
         </xsl:for-each>
-        <AdditionalData>
-          <SalesRepresentativeID>5235</SalesRepresentativeID>
-        </AdditionalData>
-        <PLATNIK_VAT>T</PLATNIK_VAT>
+        <PLATNIK_VAT>N</PLATNIK_VAT>
+        <POTENTIAL>T</POTENTIAL>
         <BLOKADA_ZAKUPU>N</BLOKADA_ZAKUPU>
         <RODZAJ_DATY_WAR_HANDL_FAKT>S</RODZAJ_DATY_WAR_HANDL_FAKT>
         <RODZAJ_DATY_WAR_HANDL_ZAM>W</RODZAJ_DATY_WAR_HANDL_ZAM>
