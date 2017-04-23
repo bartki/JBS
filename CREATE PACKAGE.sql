@@ -1267,6 +1267,7 @@ IS
                              'YYYY-MM-DD hh24:mi:ss'),
                     'DD');
             vr_document.description := r_ksdk.description;
+	        vr_document.subtype := 'KP201';            
             v_ksrk_guid :=
                 api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
                                                     p_currency   => 'PLN');
