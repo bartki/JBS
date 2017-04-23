@@ -1,4 +1,3 @@
-/* Formatted on 23-kwi-2017 11:15:26 (QP5 v5.291) */
 CREATE TABLE jg_sql_repository
 (
     id              NUMBER (10, 0),
@@ -4750,7 +4749,7 @@ GROUP BY rndo.symbol_dokumentu,
           </ADRES>
           <ClassID>Detal</ClassID>
           <Profile>Reseller</Profile>
-          <ContactPerson>Tomasz Wspania³y</ContactPerson>
+          <ContactPerson>Tomasz Wspaniały</ContactPerson>
           <ChainID>123</ChainID>
         </xsl:for-each>
         <AdditionalData>
@@ -4876,7 +4875,7 @@ GROUP BY rndo.symbol_dokumentu,
           </ADRES>
           <ClassID>Detal</ClassID>
           <Profile>Reseller</Profile>
-          <ContactPerson>Tomasz Wspania³y</ContactPerson>
+          <ContactPerson>Tomasz Wspaniały</ContactPerson>
           <ChainID>123</ChainID>
         </xsl:for-each>
         <AdditionalData>
