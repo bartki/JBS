@@ -1021,7 +1021,9 @@ GROUP BY rndo.symbol_dokumentu,
                    CONNECT BY PRIOR id = grkn_id) grkn
             WHERE     kngr.konr_id = konr.id
                   AND kngr.grkn_id = grkn.id
-                  AND grkn.nazwa = osol.atrybut_t01)
+                  AND grkn.nazwa = osol.atrybut_t01
+				  AND konr.aktualny = ''T'' and (konr.platnik = ''T'' or konr.odbiorca = ''T'' or konr.potential = ''T'')
+				  )
            contractors
   FROM lg_osoby_log osol, pa_osoby osby, ap_okregi_sprzedazy okgi
  WHERE     okgi.symbol = osol.atrybut_t01
