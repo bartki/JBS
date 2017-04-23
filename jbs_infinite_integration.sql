@@ -4542,16 +4542,22 @@ GROUP BY rndo.symbol_dokumentu,
                    jg_sqre_seq.NEXTVAL,
                    'RESERVATIONS',
                    'SELECT zare.dest_symbol order_id,
-                         zare.data_realizacji realization_date,
-                         inma.indeks commoditiy_id,
-                         jg_output_sync.format_number(zare.ilosc, 4) quantity_ordered,
-                         jg_output_sync.format_number(reze.ilosc_zarezerwowana, 100) quantity_reserved
-                    FROM lg_rzm_rezerwacje         reze,
-                         lg_rzm_zadania_rezerwacji zare,
-                         ap_indeksy_materialowe    inma
-                   WHERE     reze.zare_id = zare.id
-                         AND zare.inma_id = inma.id
-                         AND reze.id IN (:p_id)',
+                           sord.doc_symbol_rcv AS sfa_salo_id,
+                           zare.data_realizacji realization_date,
+                           inma.indeks commoditiy_id,
+                           jg_output_sync.format_number(zare.ilosc, 4) quantity_ordered,
+                           jg_output_sync.format_number(reze.ilosc_zarezerwowana + reze.ilosc_pobrana, 100) quantity_reserved
+                      FROM lg_rzm_rezerwacje reze,
+                           lg_rzm_zadania_rezerwacji zare,
+                           ap_indeksy_materialowe inma,
+                           lg_sal_orders sord,
+                           lg_sal_orders_it sori
+                     WHERE     reze.zare_id  = zare.id
+                           AND zare.inma_id  = inma.id
+                           AND zare.zrre_id  = sori.id
+                           AND sord.id       = sori.document_id
+                           AND zare.zrre_typ = ''ZASI''
+                           AND reze.id = IN (:p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
