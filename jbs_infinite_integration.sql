@@ -1910,17 +1910,51 @@ IS
         v_xml                XMLTYPE;
         v_core_ns   CONSTANT VARCHAR2 (200)
             := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"' ;
+        v_okreg_id           ap_okregi_sprzedazy.id%TYPE;
+        v_symbol             ap_kontrahenci.symbol%TYPE;
     BEGIN
         v_xml := transform_xml (p_xml => p_xml, p_object_type => p_object_type);
+
+        v_symbol :=
+            pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns);
+
+        IF v_symbol IS NULL
+        THEN
+            SELECT 'NKKX' || jbs_mp_nkk_kln.NEXTVAL
+              INTO v_symbol
+              FROM DUAL;
+        END IF;
+
+        v_xml :=
+            xmltype.APPENDCHILDXML (
+                v_xml,
+                'PA_KONTRAHENT_TK',
+                xmltype ('<SYMBOL>' || v_symbol || '</SYMBOL>'),
+                v_core_ns);
+
+        v_okreg_id :=
+            pa_xmltype.wartosc (v_xml,
+                                '/PA_KONTRAHENT_TK/SALES_REPRESENTATIVE_ID',
+                                v_core_ns);
+
+        IF v_okreg_id IS NOT NULL
+        THEN
+            v_xml :=
+                xmltype.APPENDCHILDXML (
+                    v_xml,
+                    'PA_KONTRAHENT_TK',
+                    xmltype (
+                           '<OKREG_SPRZEDAZY>'
+                        || lg_okgi_sql.rt (p_id => v_okreg_id).symbol
+                        || '</OKREG_SPRZEDAZY>'),
+                    v_core_ns);
+        END IF;
+
         apix_lg_konr.update_obj (p_konr                           => v_xml.getclobval,
                                  p_update_limit                   => FALSE,
                                  p_update_addresses_by_konr_mdf   => TRUE);
 
-        RETURN lg_konr_sql.id (
-                   p_symbol   => pa_xmltype.wartosc (
-                                    v_xml,
-                                    '/PA_KONTRAHENT_TK/SYMBOL',
-                                    v_core_ns));
+        RETURN lg_konr_sql.id (p_symbol => v_symbol);
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
@@ -2029,7 +2063,6 @@ IS
                              'YYYY-MM-DD hh24:mi:ss'),
                     'DD');
             vr_document.description := r_ksdk.description;
-	    vr_document.subtype := 'KP201';
             v_ksrk_guid :=
                 api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
                                                     p_currency   => 'PLN');
@@ -4508,22 +4541,16 @@ GROUP BY rndo.symbol_dokumentu,
                    jg_sqre_seq.NEXTVAL,
                    'RESERVATIONS',
                    'SELECT zare.dest_symbol order_id,
-                           sord.doc_symbol_rcv AS sfa_salo_id,
-                           zare.data_realizacji realization_date,
-                           inma.indeks commoditiy_id,
-                           jg_output_sync.format_number(zare.ilosc, 4) quantity_ordered,
-                           jg_output_sync.format_number(reze.ilosc_zarezerwowana + reze.ilosc_pobrana, 100) quantity_reserved
-                      FROM lg_rzm_rezerwacje reze,
-                           lg_rzm_zadania_rezerwacji zare,
-                           ap_indeksy_materialowe inma,
-                           lg_sal_orders sord,
-                           lg_sal_orders_it sori
-                     WHERE     reze.zare_id  = zare.id
-                           AND zare.inma_id  = inma.id
-                           AND zare.zrre_id  = sori.id
-                           AND sord.id       = sori.document_id
-                           AND zare.zrre_typ = ''ZASI''
-                           AND reze.id = IN (:p_id)',
+                         zare.data_realizacji realization_date,
+                         inma.indeks commoditiy_id,
+                         jg_output_sync.format_number(zare.ilosc, 4) quantity_ordered,
+                         jg_output_sync.format_number(reze.ilosc_zarezerwowana, 100) quantity_reserved
+                    FROM lg_rzm_rezerwacje         reze,
+                         lg_rzm_zadania_rezerwacji zare,
+                         ap_indeksy_materialowe    inma
+                   WHERE     reze.zare_id = zare.id
+                         AND zare.inma_id = inma.id
+                         AND reze.id IN (:p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
@@ -4693,9 +4720,9 @@ GROUP BY rndo.symbol_dokumentu,
       <xsl:for-each select="NewCustomer">
         <xsl:for-each select="BasicData">
           <xsl:for-each select="MobizID">
-            <SYMBOL>
+            <MOBIZ_ID>
               <xsl:value-of select="."/>
-            </SYMBOL>
+            </MOBIZ_ID>
           </xsl:for-each>
           <xsl:for-each select="Name">
             <NAZWA>
@@ -4751,18 +4778,17 @@ GROUP BY rndo.symbol_dokumentu,
                 </VARCHAR2>
               </xsl:for-each>
             </ADRESY_EMAIL>
-            <RegionID>080</RegionID>
-            <ProvinceID>450</ProvinceID>
           </ADRES>
-          <ClassID>Detal</ClassID>
-          <Profile>Reseller</Profile>
-          <ContactPerson>Tomasz Wspaniały</ContactPerson>
-          <ChainID>123</ChainID>
         </xsl:for-each>
-        <AdditionalData>
-          <SalesRepresentativeID>5235</SalesRepresentativeID>
-        </AdditionalData>
-        <PLATNIK_VAT>T</PLATNIK_VAT>
+        <xsl:for-each select="AdditionalData">
+          <xsl:for-each select="SalesRepresentativeID">
+          <SALES_REPRESENTATIVE_ID>
+             <xsl:value-of select="."/>
+          </SALES_REPRESENTATIVE_ID>
+          </xsl:for-each>
+         </xsl:for-each>
+        <PLATNIK_VAT>N</PLATNIK_VAT>
+        <POTENTIAL>T</POTENTIAL>
         <BLOKADA_ZAKUPU>N</BLOKADA_ZAKUPU>
         <RODZAJ_DATY_WAR_HANDL_FAKT>S</RODZAJ_DATY_WAR_HANDL_FAKT>
         <RODZAJ_DATY_WAR_HANDL_ZAM>W</RODZAJ_DATY_WAR_HANDL_ZAM>
