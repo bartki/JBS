@@ -113,7 +113,7 @@ BEGIN
                                   p_subsystem_code   => 'PA');
     api_pa_obie.register_package (p_object_name      => 'JG_FTP_CONFIGURATION',
                                   p_subsystem_code   => 'PA');
-    api_pa_obie.register_package (p_object_name      => '\SYNC',
+    api_pa_obie.register_package (p_object_name      => 'JG_INPUT_SYNC',
                                   p_subsystem_code   => 'PA');
     api_pa_obie.register_package (p_object_name      => 'JG_OUTPUT_SYNC',
                                   p_subsystem_code   => 'PA');
