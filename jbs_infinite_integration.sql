@@ -1,3 +1,4 @@
+/* Formatted on 04-cze-2017 17:06:07 (QP5 v5.291) */
 CREATE TABLE jg_sql_repository
 (
     id              NUMBER (10, 0),
@@ -2063,7 +2064,7 @@ IS
                              'YYYY-MM-DD hh24:mi:ss'),
                     'DD');
             vr_document.description := r_ksdk.description;
-	    vr_document.subtype := 'KP201';	    
+            vr_document.subtype := 'KP201';
             v_ksrk_guid :=
                 api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
                                                     p_currency   => 'PLN');
@@ -4663,7 +4664,7 @@ GROUP BY rndo.symbol_dokumentu,
                    jg_sqre_seq.NEXTVAL,
                    'SALES_REPRESENTATIVES',
                    'SELECT okgi.id,
-       osby.imie || ' ' || osby.nazwisko AS name,
+       osby.imie || '' '' || osby.nazwisko AS name,
        osol.atrybut_t02 AS numer_kasy,
        osol.kod AS id_erp,
        1 AS active,
@@ -4691,8 +4692,8 @@ GROUP BY rndo.symbol_dokumentu,
             WHERE     kngr.konr_id = konr.id
                   AND kngr.grkn_id = grkn.id
                   AND grkn.nazwa = osol.atrybut_t01
-				  AND konr.aktualny = ''T'' and (konr.platnik = ''T'' or konr.odbiorca = ''T'' or konr.potential = ''T'')
-				  )
+                  AND konr.aktualny = ''T'' and (konr.platnik = ''T'' or konr.odbiorca = ''T'' or konr.potential = ''T'')
+                  )
            contractors
   FROM lg_osoby_log osol, pa_osoby osby, ap_okregi_sprzedazy okgi
  WHERE     okgi.symbol = osol.atrybut_t01
