@@ -1274,7 +1274,7 @@ IS
                     p_nr_bledu      => -20001,
                     p_tekst_bledu   =>    'Dokument o symbolu: '
                                        || r_ksdk.cash_receipt_number_2
-                                       || ' znajduje sie ju? w kasie. Otrzyma3 symbol: '
+                                       || ' znajduje sie już w kasie. Otrzymał symbol: '
                                        || r_exists.symbol_dokumentu);
             END LOOP;
 
