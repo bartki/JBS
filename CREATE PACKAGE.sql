@@ -1129,29 +1129,47 @@ IS
         RETURN jg_input_log.object_id%TYPE
     IS
         ------------------------------------------------------------------------------------------------------------------------
-        v_xml                XMLTYPE;        
-        v_core_ns   CONSTANT VARCHAR2 (200):= 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"';
+        v_xml                XMLTYPE;
+        v_core_ns   CONSTANT VARCHAR2 (200)
+            := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"' ;
         v_okreg_id           ap_okregi_sprzedazy.id%TYPE;
         v_symbol             ap_kontrahenci.symbol%TYPE;
     BEGIN
         v_xml := transform_xml (p_xml => p_xml, p_object_type => p_object_type);
-        
-        v_symbol := pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns);
-        
+
+        v_symbol :=
+            pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns);
+
         IF v_symbol IS NULL
         THEN
             SELECT 'NKKX' || jbs_mp_nkk_kln.NEXTVAL
               INTO v_symbol
-              FROM dual;
+              FROM DUAL;
         END IF;
-        
-        v_xml := xmltype.APPENDCHILDXML (v_xml, 'PA_KONTRAHENT_TK', xmltype ('<SYMBOL>' || v_symbol || '</SYMBOL>'), v_core_ns);
-        
-        v_okreg_id := pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SALES_REPRESENTATIVE_ID', v_core_ns);
-        
+
+        v_xml :=
+            xmltype.APPENDCHILDXML (
+                v_xml,
+                'PA_KONTRAHENT_TK',
+                xmltype ('<SYMBOL>' || v_symbol || '</SYMBOL>'),
+                v_core_ns);
+
+        v_okreg_id :=
+            pa_xmltype.wartosc (v_xml,
+                                '/PA_KONTRAHENT_TK/SALES_REPRESENTATIVE_ID',
+                                v_core_ns);
+
         IF v_okreg_id IS NOT NULL
         THEN
-            v_xml := xmltype.APPENDCHILDXML (v_xml, 'PA_KONTRAHENT_TK', xmltype ('<OKREG_SPRZEDAZY>' || lg_okgi_sql.RT(p_id=> v_okreg_id).symbol || '</OKREG_SPRZEDAZY>'), v_core_ns);
+            v_xml :=
+                xmltype.APPENDCHILDXML (
+                    v_xml,
+                    'PA_KONTRAHENT_TK',
+                    xmltype (
+                           '<OKREG_SPRZEDAZY>'
+                        || lg_okgi_sql.rt (p_id => v_okreg_id).symbol
+                        || '</OKREG_SPRZEDAZY>'),
+                    v_core_ns);
         END IF;
 
         apix_lg_konr.update_obj (p_konr                           => v_xml.getclobval,
@@ -1181,16 +1199,19 @@ IS
         p_object_type    IN jg_sql_repository.object_type%TYPE)
         RETURN jg_input_log.object_id%TYPE
     IS
-        r_ksks        rk_ks_kasy%ROWTYPE;
-        v_konr_id     ap_kontrahenci.id%TYPE;
-        v_ksrk_guid   rk_ks_raporty_kasowe.guid%TYPE;
-        vr_document   api_rk_ks_ksdk.tr_document;
-        vr_payment    api_rk_ks_ksdk.tr_payment;
-        v_ksdk_guid   rk_ks_dokumenty_kasowe.guid%TYPE;
-        v_ksdk_id     rk_ks_dokumenty_kasowe.id%TYPE;
-        v_dosp_id     lg_sal_invoices.id%TYPE;
-        r_plat        lg_dosp_platnosci%ROWTYPE;
-        r_ksrk        rk_ks_raporty_kasowe%ROWTYPE;
+        r_ksks              rk_ks_kasy%ROWTYPE;
+        v_konr_id           ap_kontrahenci.id%TYPE;
+        v_ksrk_guid         rk_ks_raporty_kasowe.guid%TYPE;
+        vr_document         api_rk_ks_ksdk.tr_document;
+        vr_payment          api_rk_ks_ksdk.tr_payment;
+        v_ksdk_guid         rk_ks_dokumenty_kasowe.guid%TYPE;
+        v_ksdk_id           rk_ks_dokumenty_kasowe.id%TYPE;
+        v_kasjer_id         rk_ks_dokumenty_kasowe.kasjer_id%TYPE;
+        v_kasjer_imie       rk_ks_dokumenty_kasowe.kasjer_imie%TYPE;
+        v_kasjer_nazwisko   rk_ks_dokumenty_kasowe.kasjer_nazwisko%TYPE;
+        v_dosp_id           lg_sal_invoices.id%TYPE;
+        r_plat              lg_dosp_platnosci%ROWTYPE;
+        r_ksrk              rk_ks_raporty_kasowe%ROWTYPE;
     BEGIN
         FOR r_ksdk
             IN (SELECT cash_receipt.*
@@ -1253,7 +1274,7 @@ IS
                     p_nr_bledu      => -20001,
                     p_tekst_bledu   =>    'Dokument o symbolu: '
                                        || r_ksdk.cash_receipt_number_2
-                                       || ' znajduje się już w kasie. Otrzymał symbol: '
+                                       || ' znajduje sie ju? w kasie. Otrzyma3 symbol: '
                                        || r_exists.symbol_dokumentu);
             END LOOP;
 
@@ -1267,7 +1288,10 @@ IS
                              'YYYY-MM-DD hh24:mi:ss'),
                     'DD');
             vr_document.description := r_ksdk.description;
-	        vr_document.subtype := 'KP201';            
+            vr_document.subtype := 'KP201';
+
+
+
             v_ksrk_guid :=
                 api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
                                                     p_currency   => 'PLN');
@@ -1352,9 +1376,25 @@ IS
                 END IF;
             END LOOP;
 
+            v_kasjer_id := NULL;
+            v_kasjer_imie := NULL;
+            v_kasjer_nazwisko := NULL;
+
+            FOR r_osob IN (SELECT prac_id, imie, nazwisko
+                           FROM lg_osoby
+                           WHERE atrybut_t02 = r_ksdk.cash_register_symbol)
+            LOOP
+                v_kasjer_id := r_osob.prac_id;
+                v_kasjer_imie := r_osob.imie;
+                v_kasjer_nazwisko := r_osob.nazwisko;
+            END LOOP;
+
             UPDATE rk_ks_dokumenty_kasowe
                SET t_01 = r_ksdk.cash_receipt_number_1,
-                   t_02 = r_ksdk.cash_receipt_number_2
+                   t_02 = r_ksdk.cash_receipt_number_2,
+                   kasjer_id = v_kasjer_id,
+                   kasjer_nazwisko = v_kasjer_nazwisko,
+                   kasjer_imie = v_kasjer_imie
              WHERE guid = v_ksdk_guid;
 
             api_rk_ks_ksdk.approve_document (p_ksdk_guid => v_ksdk_guid);
@@ -1963,6 +2003,7 @@ IS
 
 END;
 /
+
 
 CREATE OR REPLACE PACKAGE jg_obop_def
 IS
