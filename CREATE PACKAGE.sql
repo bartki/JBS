@@ -1556,7 +1556,7 @@ IS
     BEGIN
         FOR r_inlo IN (SELECT *
                        FROM jg_input_log inlo
-                       WHERE LENGTH (inlo.xml_response) = 0)
+                       WHERE NVL(LENGTH (inlo.xml_response), 0) = 0)
         LOOP
             IF r_inlo.object_type = 'ORDER'
             THEN
