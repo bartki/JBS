@@ -156,19 +156,26 @@ GROUP BY rndo.symbol_dokumentu,
                   AND wace.inma_id = inma.id)
            minimal_prices,
        CURSOR (
-           SELECT gras.grupa_asortymentowa group_name,
-                  gras.kod group_code,
+           SELECT distinct gras.grupa_asortymentowa group_name,
+                  min(gras2.kod) over (partition by gras.grupa_asortymentowa) group_code,
                   grin.podstawowa is_primary
-             FROM ap_grupy_indeksow grin, ap_grupy_asortymentowe gras
+             FROM ap_grupy_indeksow grin, ap_grupy_asortymentowe gras,ap_grupy_asortymentowe gras2
             WHERE     gras.id = grin.gras_id
                   AND grin.inma_id = inma.id
+                  AND gras2.grupa_asortymentowa = gras.grupa_asortymentowa
                   AND gras.id IN (SELECT gras.id
                                     FROM ap_grupy_asortymentowe gras
                                   CONNECT BY PRIOR gras.id = gras.gras_id_nad
+                                  START WITH gras.kod = ''GRAS 2013'')
+                  AND gras2.id IN (SELECT gras.id
+                                    FROM ap_grupy_asortymentowe gras
+                                  CONNECT BY PRIOR gras.id = gras.gras_id_nad
                                   START WITH gras.kod = ''GRAS 2013''))
+                                          
            groups
   FROM ap_indeksy_materialowe inma
- WHERE inma.aktualny = ''T'' AND inma.id IN (:p_id)',
+ WHERE inma.aktualny = ''T''
+ AND inma.id IN (:p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
