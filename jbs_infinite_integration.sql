@@ -2628,7 +2628,8 @@ IS
 
             FOR r_sqre IN (SELECT *
                            FROM jg_sql_repository sqre
-                           WHERE sqre.direction = 'IN')
+                           WHERE sqre.direction = 'IN'
+                        GROUP BY sqre.file_location)
             LOOP
                 v_file_list := NULL;
                 jg_ftp.nlst (p_conn   => v_connection,
