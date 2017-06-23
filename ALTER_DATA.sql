@@ -895,7 +895,7 @@ GROUP BY rndo.symbol_dokumentu,
                            AND zare.zrre_id  = sori.id
                            AND sord.id       = sori.document_id
                            AND zare.zrre_typ = ''ZASI''
-                           AND reze.id = IN (:p_id)',
+                           AND reze.id IN (:p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
