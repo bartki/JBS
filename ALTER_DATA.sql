@@ -884,13 +884,13 @@ GROUP BY rndo.symbol_dokumentu,
                            zare.data_realizacji realization_date,
                            inma.indeks commoditiy_id,
                            jg_output_sync.format_number(zare.ilosc, 4) quantity_ordered,
-                           jg_output_sync.format_number(reze.ilosc_zarezerwowana + reze.ilosc_pobrana, 100) quantity_reserved
+                          jg_output_sync.format_number(NVL(reze.ilosc_zarezerwowana, 0) + NVL(reze.ilosc_pobrana, 0), 100) quantity_reserved
                       FROM lg_rzm_rezerwacje reze,
                            lg_rzm_zadania_rezerwacji zare,
                            ap_indeksy_materialowe inma,
                            lg_sal_orders sord,
                            lg_sal_orders_it sori
-                     WHERE     reze.zare_id  = zare.id
+                     WHERE     reze.zare_id(+)  = zare.id
                            AND zare.inma_id  = inma.id
                            AND zare.zrre_id  = sori.id
                            AND sord.id       = sori.document_id
