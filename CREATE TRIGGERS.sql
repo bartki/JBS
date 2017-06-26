@@ -446,6 +446,11 @@ CREATE OR REPLACE TRIGGER jg_reze_observe
     REFERENCING NEW AS new OLD AS old
     FOR EACH ROW
 BEGIN
+    IF pa_wass_def.wartosc (p_nazwa => 'IMPORT_INFINITE') = 'T'
+    THEN
+        RETURN;
+    END IF;
+    
     IF lg_rzm_zare_agd.zrre_typ (p_id => NVL (:new.zare_id, :old.zare_id)) =
            'ZASI'
     THEN
