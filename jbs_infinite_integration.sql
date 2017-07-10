@@ -1772,7 +1772,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN jg_input_log%ROWTYPE IS
 ------------------------------------------------------------------------------------------------------------------------
     BEGIN
-        FOR r_inlo IN (SELECT * 
+        FOR r_inlo IN (SELECT *
                          FROM jg_input_log inlo
                         WHERE inlo.id = p_id)
         LOOP
@@ -1782,7 +1782,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN NULL;
     END;
 
-------------------------------------------------------------------------------------------------------------------------    
+------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_query_from_sql_repository (
         p_object_type                   IN      jg_input_log.object_type%TYPE)
         RETURN jg_sql_repository.sql_query%TYPE IS
@@ -1796,7 +1796,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         v_sql_query   jg_sql_repository.sql_query%TYPE;
     BEGIN
         OPEN c_sql_query (p_object_type);
-        FETCH c_sql_query 
+        FETCH c_sql_query
          INTO v_sql_query;
         CLOSE c_sql_query;
 
@@ -1849,14 +1849,14 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         pa_xmltype.ustaw_format_xml ();
 
         v_ctx := DBMS_XMLGEN.newcontext (querystring => p_sql_query);
-        
+
         IF p_rowsettag IS NOT NULL
         THEN
             DBMS_XMLGEN.setrowsettag (v_ctx, p_rowsettag);
         ELSE
             DBMS_XMLGEN.setrowsettag (v_ctx, NULL);
         END IF;
-        
+
         DBMS_XMLGEN.setrowtag (v_ctx, p_object_type);
         v_xml := DBMS_XMLGEN.getxml (v_ctx);
         DBMS_XMLGEN.closecontext (v_ctx);
@@ -1969,19 +1969,19 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             SELECT symbol
               FROM lg_sal_orders sord
              WHERE sord.doc_symbol_rcv = pc_doc_symbol_rcv;
-             
+
         v_wzrc_id                       lg_documents_templates.id%TYPE;
         v_data_realizacji               lg_sal_orders.realization_date%TYPE;
         v_doc_symbol_rcv                lg_sal_orders.doc_symbol_rcv%TYPE;
-        v_symbol                        lg_sal_orders.symbol%TYPE;        
+        v_symbol                        lg_sal_orders.symbol%TYPE;
         v_cinn_id                       lg_sal_orders.cinn_id%TYPE;
-        v_numer                         NUMBER;        
+        v_numer                         NUMBER;
     BEGIN
         po_should_calculate := FALSE;
         v_wzrc_id           := lg_wzrc_sql.id (p_wzorzec => pa_xmltype.wartosc (p_order_xml, '/LG_ZASP_T/WZORZEC'));
         v_data_realizacji   := TO_DATE (pa_xmltype.wartosc (p_order_xml, '/LG_ZASP_T/DATA_REALIZACJI'), 'YYYY-MM-DD"T"HH24:MI:SS".0000000+02:00"');
         v_doc_symbol_rcv    := pa_xmltype.wartosc (p_order_xml, '/ORDER/ORDER_NUMBER');
-        
+
          OPEN c_sord (v_doc_symbol_rcv);
         FETCH c_sord
          INTO v_symbol;
@@ -2000,24 +2000,58 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         END IF;
 
         CLOSE c_sord;
-        
+
         RETURN v_symbol;
     END;
-    
-------------------------------------------------------------------------------------------------------------------------        
+
+------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_order_reserv_query (
         p_sord_id                       IN      lg_sal_orders.id%TYPE )
         RETURN CLOB IS
-------------------------------------------------------------------------------------------------------------------------        
-        c_reservation                   SYS_REFCURSOR;
-        v_reservation_list              CLOB;
+------------------------------------------------------------------------------------------------------------------------
         v_rese_sql_query                CLOB;
     BEGIN
         v_rese_sql_query := get_query_from_sql_repository(p_object_type => 'RESERVATIONS');
         RETURN REPLACE (v_rese_sql_query, 'AND reze.id IN (:p_id)', 'AND sord.id = ' || p_sord_id);
     END;
+
+------------------------------------------------------------------------------------------------------------------------
+    FUNCTION check_reservations (
+        p_sord_id                       IN      lg_sal_orders.id%TYPE )
+        RETURN BOOLEAN IS
+------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_reserv (
+            pc_sord_id                       IN      lg_sal_orders.id%TYPE ) IS
+            SELECT 'N'
+              FROM lg_rzm_zadania_rezerwacji zare,
+                   lg_sal_orders_it sori,
+                   lg_rzm_rezerwacje reze
+             WHERE     sori.id = zare.zrre_id
+                   AND reze.zare_id (+) = zare.id
+                   AND sori.document_id = pc_sord_id 
+                   AND zare.ilosc > NVL(reze.ilosc_zarezerwowana, 0) + NVL(reze.ilosc_pobrana, 0);
+        
+        v_reserv                        VARCHAR2(1);
+        v_result                        BOOLEAN;
+------------------------------------------------------------------------------------------------------------------------
+    BEGIN
+         OPEN c_reserv(p_sord_id);
+        FETCH c_reserv
+         INTO v_reserv;
+        
+        IF c_reserv%FOUND
+        THEN
+            v_result := FALSE;
+        ELSE
+            v_result := TRUE;
+        END IF;
+        
+        CLOSE c_reserv;
+        
+        RETURN v_result;
+    END;
     
-------------------------------------------------------------------------------------------------------------------------                
+------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_cash_receipts (
         p_operation_id                  IN      jg_input_log.id%TYPE )
         RETURN jg_input_log.object_id%TYPE IS
@@ -2082,12 +2116,12 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                                        || ' znajduje sie już w kasie. Otrzymał symbol: '
                                        || r_exists.symbol_dokumentu);
             END LOOP;
-            
+
             vr_document.konr_id     := v_konr_id;
             vr_document.cash_paid   := to_money (r_ksdk.cash_paid);
             vr_document.date        := TRUNC (TO_DATE (REPLACE (r_ksdk.cash_receipt_date, 'T', ' '), 'YYYY-MM-DD hh24:mi:ss'), 'DD');
             vr_document.description := r_ksdk.description;
-            vr_document.subtype     := 'KP201';            
+            vr_document.subtype     := 'KP201';
             v_ksrk_guid             := api_rk_ks_ksrk.current_cash_report (p_kska_id => r_ksks.id, p_currency => 'PLN');
 
             IF v_ksrk_guid IS NOT NULL
@@ -2147,7 +2181,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                     vr_payment             := NULL;
                     vr_payment.symbol      := r_payments.invoice_symbol;
                     vr_payment.paid_amount := to_money (r_payments.paid_amount);
-                    
+
                     api_rk_ks_ksdk.create_payment (p_ksdk_guid   => v_ksdk_guid,
                                                    pr_payment    => vr_payment);
                 END IF;
@@ -2189,11 +2223,11 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
 ------------------------------------------------------------------------------------------------------------------------
         v_xml                           XMLTYPE;
         v_xml_clob                      CLOB;
-        v_sql_query                     CLOB;        
+        v_sql_query                     CLOB;
         v_symbol                        lg_sal_orders.symbol%TYPE;
         v_sord_id                       lg_sal_orders.id%TYPE;
         v_order_type                    VARCHAR2 (1);
-        v_should_calculate              BOOLEAN := FALSE;              
+        v_should_calculate              BOOLEAN := FALSE;
         v_rese_xml_clob                 CLOB;
         v_rese_xml                      XMLTYPE;
         v_price                         lg_sal_orders_it.net_price%TYPE;
@@ -2204,92 +2238,73 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         v_sql_query  := REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
         v_xml_clob   := create_xml (v_sql_query, p_object_type);
 
-        v_order_type := pa_xmltype.wartosc (xmltype (v_xml_clob), '/ORDER/ORDER_TYPE');        
+        v_order_type := pa_xmltype.wartosc (xmltype (v_xml_clob), '/ORDER/ORDER_TYPE');
         v_xml        := transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
 
         v_symbol := determine_order_symbol(v_xml, v_should_calculate);
-        v_xml    := xmltype.APPENDCHILDXML (v_xml, 'LG_ZASP_T', xmltype ('<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));
+        v_xml    := xmltype.APPENDCHILDXML (v_xml, 'LG_ZASP_T', xmltype ('<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));        
 
-        IF v_order_type = 'R'
+        apix_lg_zasp.aktualizuj (p_zamowienie => v_xml.getclobval);
+        v_sord_id := lg_sord_sql.id_symbol (p_symbol => v_symbol);
+
+        IF v_should_calculate
         THEN
-            SAVEPOINT before_reservation;
-            
-            apix_lg_zasp.aktualizuj (p_zamowienie => v_xml.getclobval);
-            v_sord_id := lg_sord_sql.id_symbol (p_symbol => v_symbol);
+            FOR r_dosi IN (SELECT *
+                             FROM lg_sal_orders_it sori
+                            WHERE sori.document_id = v_sord_id)
+            LOOP
+                lg_dosi_def.przelicz_wartosci_na_dosi (
+                    po_cena                      => v_price,
+                    po_wartosc_brutto            => r_dosi.gross_value,
+                    po_wartosc_netto             => r_dosi.net_value,
+                    po_wartosc_vat               => r_dosi.vat_value,
+                    p_cena_z_cennika             => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.price_from_list_n, r_dosi.price_from_list_g),
+                    p_ilosc                      => r_dosi.quantity,
+                    p_stva_id                    => r_dosi.stva_id,
+                    p_upust_cj_z_global          => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.discount_unit_price_glb_n, r_dosi.discount_unit_price_glb_g),
+                    p_upust_cj_z_pozycji         => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.discount_unit_price_line_n, r_dosi.discount_unit_price_line_g),
+                    p_obciazenie_zwolnienie_ceny => r_dosi.price_difference,
+                    p_wg_cen                     => r_dosi.doc_pricing_type,
+                    p_typ_faktury                => r_dosi.doc_type);
 
-            Lg_Dsr_Rezerwowanie.Rezerwuj_Wg_Dosp(p_id => v_sord_id);
-            
-            v_rese_xml_clob := create_xml(get_order_reserv_query(v_sord_id), 'RESERVATION', 'RESERVATIONS');
-            v_rese_xml      := transform_xml(v_rese_xml_clob, 'RESERVATIONS');
-           
-            ROLLBACK TO before_reservation;
-            
-            UPDATE jg_input_log
-               SET xml_response = v_rese_xml.getClobVal
-             WHERE id = p_operation_id;
-             
-            RETURN NULL;
+                IF r_dosi.doc_pricing_type = 'N'
+                THEN
+                    r_dosi.net_price := v_price;
+                ELSE
+                    r_dosi.gross_price := v_price;
+                END IF;
+
+                lg_sori_def.update_row (pr_this => r_dosi);
+            END LOOP;
         END IF;
-          
-        IF v_order_type = 'O'
-        THEN            
-            apix_lg_zasp.aktualizuj (p_zamowienie => v_xml.getclobval);
-            v_sord_id := lg_sord_sql.id_symbol (p_symbol => v_symbol);
 
-            IF v_should_calculate
-            THEN
-                FOR r_dosi IN (SELECT *
-                                 FROM lg_sal_orders_it sori
-                                WHERE sori.document_id = v_sord_id)
-                LOOP
-                    lg_dosi_def.przelicz_wartosci_na_dosi (
-                        po_cena                      => v_price,
-                        po_wartosc_brutto            => r_dosi.gross_value,
-                        po_wartosc_netto             => r_dosi.net_value,
-                        po_wartosc_vat               => r_dosi.vat_value,
-                        p_cena_z_cennika             => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.price_from_list_n, r_dosi.price_from_list_g),
-                        p_ilosc                      => r_dosi.quantity,
-                        p_stva_id                    => r_dosi.stva_id,
-                        p_upust_cj_z_global          => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.discount_unit_price_glb_n, r_dosi.discount_unit_price_glb_g),
-                        p_upust_cj_z_pozycji         => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.discount_unit_price_line_n, r_dosi.discount_unit_price_line_g),
-                        p_obciazenie_zwolnienie_ceny => r_dosi.price_difference,
-                        p_wg_cen                     => r_dosi.doc_pricing_type,
-                        p_typ_faktury                => r_dosi.doc_type);
+        lg_dosp_obe.zakoncz;
 
-                    IF r_dosi.doc_pricing_type = 'N'
-                    THEN
-                        r_dosi.net_price := v_price;
-                    ELSE
-                        r_dosi.gross_price := v_price;
-                    END IF;
-                    
-                    lg_sori_def.update_row (pr_this => r_dosi);
-                END LOOP;
-            END IF;
+        IF lg_sord_agd.global_discount (p_id => v_sord_id) != 0
+        THEN
+            lg_dosp_def.zmien_dolaczono_upust_glb (p_dosp_id => v_sord_id, p_dolaczono_upust_glb => 'T');
+        END IF;
 
-            lg_dosp_obe.zakoncz;            
+        /*UPDATE lg_sal_orders
+           SET generate_warehouse_doc = 'T'
+         WHERE id = v_sord_id;*/
 
-            IF lg_sord_agd.global_discount (p_id => v_sord_id) != 0
-            THEN
-                lg_dosp_def.zmien_dolaczono_upust_glb (p_dosp_id => v_sord_id, p_dolaczono_upust_glb => 'T');
-            END IF;
-
-            UPDATE lg_sal_orders
-               SET generate_warehouse_doc = 'T'
-             WHERE id = v_sord_id;
-
+        IF   (     v_order_type = 'R'
+               AND check_reservations(v_sord_id))
+           OR v_order_type = 'O'
+        THEN
             lg_dosp_def.zatwierdz_dosp (p_dosp_id => v_sord_id);
-            
-            v_rese_xml_clob := create_xml(get_order_reserv_query(v_sord_id), 'RESERVATION', 'RESERVATIONS');
-            v_rese_xml      := transform_xml(v_rese_xml_clob, 'RESERVATIONS');
-            
-            UPDATE jg_input_log
-               SET xml_response = v_rese_xml.GetClobVal
-             WHERE id = p_operation_id;
-        END IF;        
+        END IF;
+
+        v_rese_xml_clob := create_xml(get_order_reserv_query(v_sord_id), 'RESERVATION', 'RESERVATIONS');
+        v_rese_xml      := transform_xml(v_rese_xml_clob, 'RESERVATIONS');
+
+        UPDATE jg_input_log
+           SET xml_response = v_rese_xml.GetClobVal
+         WHERE id = p_operation_id;
         
         pa_wass_def.usun (p_nazwa => 'IMPORT_INFINITE');
-        
+
         RETURN v_sord_id;
     END;
 
@@ -2302,31 +2317,31 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         v_xml_path                      VARCHAR2 (500);
         v_sql_query                     VARCHAR2 (4000);
         v_file_name                     VARCHAR2(500);
-    BEGIN          
+    BEGIN
         IF pr_operation.object_type = 'ORDER'
         THEN
             v_xml_path    := '/Order/OrderHeader/OrderNumber';
-            v_file_name   := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/order_' || pr_operation.file_name;            
-            
+            v_file_name   := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/order_' || pr_operation.file_name;
+
         ELSIF    pr_operation.object_type = 'NEW_CONTRACTORS'
               OR pr_operation.object_type = 'CUSTOMER_DATA'
         THEN
             v_file_name := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/contractors/contractor_' || pr_operation.file_name;
-            
+
             IF pr_operation.object_type = 'NEW_CONTRACTORS'
             THEN
                 v_xml_path := '/NewCustomer/BasicData/MobizID';
             ELSE
                 v_xml_path := '/CustomerData/BasicData/MobizID';
             END IF;
-            
+
         ELSIF pr_operation.object_type = 'CASH_RECEIPTS'
         THEN
-            v_xml_path  := '/NewKPConfirmation/KPNumber';    
+            v_xml_path  := '/NewKPConfirmation/KPNumber';
             v_file_name := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/new_kp/new_kp_' || pr_operation.file_name;
         END IF;
-            
-        BEGIN                
+
+        BEGIN
             v_oryginal_id := pa_xmltype.wartosc (px_xml    => xmltype (pr_operation.xml),
                                                  p_sciezka => v_xml_path);
         EXCEPTION
@@ -2334,7 +2349,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             THEN
                 v_oryginal_id := 'TO_CHAR(NULL)';
         END;
-                
+
         v_sql_query :=
                 'SELECT ' || v_oryginal_id || ' order_number,
                           status,
@@ -2359,16 +2374,16 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                     NULL;
             END;
         END IF;
-        
+
         IF v_xml_response IS NOT NULL
-        THEN    
+        THEN
             UPDATE jg_input_log
                SET xml_response = v_xml_response
              WHERE id = pr_operation.id;
         END IF;
     END;
-    
-------------------------------------------------------------------------------------------------------------------------          
+
+------------------------------------------------------------------------------------------------------------------------
     PROCEDURE send_response (
         p_operation_id                  IN      jg_input_log.id%TYPE ) IS
 ------------------------------------------------------------------------------------------------------------------------
@@ -2379,17 +2394,17 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         v_sql_query                     VARCHAR2 (4000);
         v_oryginal_id                   VARCHAR2 (100);
         v_xml_path                      VARCHAR2 (500);
-        v_xml_response                  CLOB;        
+        v_xml_response                  CLOB;
         v_reservation_response          CLOB;
         v_order_type                    VARCHAR2 (1);
     BEGIN
         r_operation := inlo_rt(p_operation_id);
-        
+
         IF r_operation.object_type = 'ORDER'
         THEN
             v_reservation_response := r_operation.xml_response;
             v_order_type           := pa_xmltype.wartosc (px_xml    => xmltype (r_operation.xml),
-                                                          p_sciezka => '/Order/OrderHeader/OrderType');                                                          
+                                                          p_sciezka => '/Order/OrderHeader/OrderType');
             BEGIN
                 v_oryginal_id := pa_xmltype.wartosc (px_xml    => xmltype (r_operation.xml),
                                                      p_sciezka => '/Order/OrderHeader/OrderNumber');
@@ -2409,7 +2424,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                            (SELECT symbol
                               FROM lg_sal_orders
                              WHERE id = inlo.object_id) erp_order_symbol
-                      FROM jg_input_log inlo 
+                      FROM jg_input_log inlo
                      WHERE id = ' || r_operation.id;
 
             v_xml_clob := create_xml (v_sql_query, r_operation.object_type || '_RESPONSE');
@@ -2435,60 +2450,56 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                         p_xml         => v_reservation_response,
                         p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/reservations_' || r_operation.file_name);
 
-                v_xml_response := NVL (CONCAT (v_xml_response, v_reservation_response), v_xml_response);    
+                v_xml_response := NVL (CONCAT (v_xml_response, v_reservation_response), v_xml_response);
             END IF;
-            
-            IF v_order_type = 'O'
+
+            v_sql_query :=
+                   'SELECT sord.doc_symbol_rcv                                                           order_number,
+                           ''ESTABLISHED''                                                               status,
+                           CURSOR (SELECT to_char(zare.data_modyfikacji,''YYYY/MM/DD HH24:MI:SS'')       reservation_date,
+                                          sori.item_symbol                                               commodity_id,
+                                          sori.quantity                                                  quantity_ordered,
+                                          NVL(reze.ilosc_zarezerwowana, 0) + NVL(reze.ilosc_pobrana, 0)  quantity_reserved
+                                     FROM lg_sal_orders_it sori,
+                                          lg_rzm_zadania_rezerwacji zare,
+                                          lg_rzm_rezerwacje reze
+                                    WHERE     zare.zrre_id(+) = sori.id
+                                          AND reze.zare_id(+) = zare.id
+                                          AND sori.document_id = sord.id) reservations
+                      FROM lg_sal_orders sord
+                     WHERE sord.id = ' || r_operation.object_id;
+
+            v_xslt :=
+                '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                   <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
+                   <xsl:strip-space elements="*"/>
+                   <xsl:template match="node()|@*">
+                     <xsl:copy>
+                       <xsl:apply-templates select="node()|@*"/>
+                     </xsl:copy>
+                   </xsl:template>
+                   <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
+                   <xsl:template priority="2" match="RESERVATIONS_ROW">
+                     <RESERVATION><xsl:apply-templates /></RESERVATION>
+                   </xsl:template>
+                 </xsl:stylesheet>';
+
+            v_xml_clob := create_xml (v_sql_query, 'ORDER_RESPONSE');
+
+            IF v_xml_clob IS NOT NULL
             THEN
-                v_sql_query :=
-                       'SELECT sord.doc_symbol_rcv                                                           order_number,
-                               ''ESTABLISHED''                                                               status,
-                               CURSOR (SELECT to_char(zare.data_modyfikacji,''YYYY/MM/DD HH24:MI:SS'')       reservation_date,
-                                              sori.item_symbol                                               commodity_id,
-                                              sori.quantity                                                  quantity_ordered,
-                                              NVL(reze.ilosc_zarezerwowana, 0) + NVL(reze.ilosc_pobrana, 0)  quantity_reserved
-                                         FROM lg_sal_orders_it sori,
-                                              lg_rzm_zadania_rezerwacji zare,
-                                              lg_rzm_rezerwacje reze
-                                        WHERE     zare.zrre_id(+) = sori.id
-                                              AND reze.zare_id(+) = zare.id
-                                              AND sori.document_id = sord.id) reservations
-                          FROM lg_sal_orders sord
-                         WHERE sord.id = ' || r_operation.object_id;
+                v_xml := transform_xml (v_xml_clob, 'ORDER_RESPONSE', v_xslt);
+                jg_output_sync.send_text_file_to_ftp (
+                    p_xml         => v_xml.getclobval (),
+                    p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/orderExtended_' || r_operation.file_name);
 
-                v_xslt :=
-                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-                       <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
-                       <xsl:strip-space elements="*"/>
-                       <xsl:template match="node()|@*">
-                         <xsl:copy>
-                           <xsl:apply-templates select="node()|@*"/>
-                         </xsl:copy>
-                       </xsl:template>
-                       <xsl:template match="*[not(@*|*|comment()|processing-instruction()) and normalize-space()='''']"/>
-                       <xsl:template priority="2" match="RESERVATIONS_ROW">
-                         <RESERVATION><xsl:apply-templates /></RESERVATION>
-                       </xsl:template>
-                     </xsl:stylesheet>';
-
-                v_xml_clob := create_xml (v_sql_query, 'ORDER_RESPONSE');
-
-                IF v_xml_clob IS NOT NULL
-                THEN
-                    v_xml := transform_xml (v_xml_clob, 'ORDER_RESPONSE', v_xslt);
-
-                    jg_output_sync.send_text_file_to_ftp (
-                        p_xml         => v_xml.getclobval (),
-                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/orderExtended_' || r_operation.file_name);
-
-                    v_xml_response := NVL (CONCAT (v_xml_response, v_xml.GetClobVal()), v_xml.GetClobVal());    
-                END IF;
+                v_xml_response := NVL (CONCAT (v_xml_response, v_xml.GetClobVal()), v_xml.GetClobVal());
             END IF;
-            
+
             UPDATE jg_input_log
                SET xml_response = v_xml_response
              WHERE id = r_operation.id;
-             
+
         ELSIF    r_operation.object_type = 'NEW_CONTRACTORS'
               OR r_operation.object_type = 'CUSTOMER_DATA'
         THEN
@@ -2539,7 +2550,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                         NULL;
                 END;
             END IF;
-                
+
         ELSIF r_operation.object_type = 'CASH_RECEIPTS'
         THEN
             v_xml_path := '/NewKPConfirmation/KPNumber';
@@ -2590,28 +2601,28 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         v_object_id                     jg_input_log.object_id%TYPE;
     BEGIN
         CASE pr_operation.object_type
-          
+
             WHEN 'NEW_CONTRACTORS'
             THEN
                 v_object_id :=
                     import_customer (
                         p_xml           => pr_operation.xml,
                         p_object_type   => pr_operation.object_type);
-                        
+
             WHEN 'CUSTOMER_DATA'
             THEN
                 v_object_id :=
                     import_customer (
                         p_xml           => pr_operation.xml,
                         p_object_type   => pr_operation.object_type);
-                        
+
             WHEN 'ORDER'
             THEN
                 v_object_id :=
                     import_sale_order (
                         p_operation_id   => pr_operation.id,
                         p_object_type    => pr_operation.object_type);
-                        
+
             WHEN 'CASH_RECEIPTS'
             THEN
                 v_object_id :=
@@ -2621,7 +2632,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         save_result (p_inlo_id     => pr_operation.id,
                      p_status      => 'PROCESSED',
                      p_object_id   => v_object_id);
-                     
+
         send_response(p_operation_id => pr_operation.id);
     END;
 
@@ -2742,13 +2753,13 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 WHEN OTHERS
                 THEN
                     ROLLBACK TO operation;
-                    
+
                     save_result (
                         p_inlo_id     => r_operation.id,
                         p_status      => 'ERROR',
                         p_object_id   => NULL,
                         p_error       => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
-                        
+
                     send_error_response(r_operation);
             END;
         END LOOP;
@@ -2776,12 +2787,12 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                         p_status      => 'ERROR',
                         p_object_id   => NULL,
                         p_error       => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
-                        
+
                     send_error_response(r_operation);
             END;
         END LOOP;
     END;
-    
+
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
@@ -4134,6 +4145,7 @@ GROUP BY rndo.symbol_dokumentu,
                                             XMLTABLE ( ''//Order/OrderDetail/Item''
                                                        PASSING xmltype (log1.xml)
                                                        COLUMNS item_num               VARCHAR2 (30) PATH ''/Item/ItemNum'',
+                                                               item_id                VARCHAR2 (30) PATH ''/Item/ItemID'',
                                                                seller_item_id         VARCHAR2 (30) PATH ''/Item/SellerItemID'',
                                                                name                   VARCHAR2 (70) PATH ''/Item/Name'',                                                               
                                                                unit_of_measure        VARCHAR2 (30) PATH ''/Item/UnitOfMeasure'',                                                               
@@ -4150,8 +4162,7 @@ GROUP BY rndo.symbol_dokumentu,
                                       WHERE     log1.id = LOG.id
                                             AND inma.indeks = item_xml.seller_item_id
                                             AND (    sori.document_id (+) = sord.id
-                                                 AND sori.item_symbol (+) = item_xml.seller_item_id)
-                                                 AND sori.ordinal (+) = item_xml.item_num) items
+                                                 AND sori.n_01 (+) = item_xml.item_id)) items
                        FROM jg_input_log LOG,
                             lg_documents_templates wzrc,
                             lg_punkty_sprzedazy pusp,
@@ -4533,6 +4544,14 @@ GROUP BY rndo.symbol_dokumentu,
                   <xsl:for-each select="DESCRIPTION">
                     <PA_POLE_DODATKOWE_T>
                       <NAZWA>ATRYBUT_T03</NAZWA>
+                      <WARTOSC>
+                        <xsl:value-of select="."/>
+                      </WARTOSC>
+                    </PA_POLE_DODATKOWE_T>
+                  </xsl:for-each>
+                  <xsl:for-each select="ITEM_ID">
+                    <PA_POLE_DODATKOWE_T>
+                      <NAZWA>ATRYBUT_N01</NAZWA>
                       <WARTOSC>
                         <xsl:value-of select="."/>
                       </WARTOSC>
