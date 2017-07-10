@@ -5723,10 +5723,19 @@ BEGIN
     lg_sql_wykonywanie.wykonaj_ddl (
         p_wyrazenie   => 'begin DBMS_SCHEDULER.DROP_JOB(job_name=> ''INTEGRACJAINFINITE''); end;',
         p_nr_bledu    => -27475);
+        
+    lg_sql_wykonywanie.wykonaj_ddl (
+        p_wyrazenie   => 'begin DBMS_SCHEDULER.DROP_JOB(job_name=> ''INTEGRACJA_INFINITE_OUT''); end;',
+        p_nr_bledu    => -27475);
+    
+    lg_sql_wykonywanie.wykonaj_ddl (
+        p_wyrazenie   => 'begin DBMS_SCHEDULER.DROP_JOB(job_name=> ''INTEGRACJA_INFINITE_IN''); end;',
+        p_nr_bledu    => -27475);
+        
     DBMS_SCHEDULER.create_job (
-        '"INTEGRACJAINFINITE"',
+        '"INTEGRACJA_INFINITE_OUT"',
         job_type              => 'PLSQL_BLOCK',
-        job_action            => 'BEGIN jg_output_sync.PROCESS(); jg_input_sync.get_from_ftp(); END;',
+        job_action            => 'BEGIN jg_output_sync.PROCESS(); END;',
         number_of_arguments   => 0,
         start_date            => TO_TIMESTAMP_TZ (
                                     '18-SEP-2016 12.40.32,357000000 PM +02:00',
@@ -5738,11 +5747,28 @@ BEGIN
         enabled               => FALSE,
         auto_drop             => TRUE,
         comments              => NULL);
-    DBMS_SCHEDULER.enable ('"INTEGRACJAINFINITE"');
+    DBMS_SCHEDULER.enable ('"INTEGRACJA_INFINITE_OUT"');
+    
+    DBMS_SCHEDULER.create_job (
+        '"INTEGRACJA_INFINITE_IN"',
+        job_type              => 'PLSQL_BLOCK',
+        job_action            => 'BEGIN jg_input_sync.get_from_ftp(); END;',
+        number_of_arguments   => 0,
+        start_date            => TO_TIMESTAMP_TZ (
+                                    '18-SEP-2016 12.40.32,357000000 PM +02:00',
+                                    'DD-MON-RRRR HH.MI.SSXFF AM TZR',
+                                    'NLS_DATE_LANGUAGE=english'),
+        repeat_interval       => 'FREQ=SECONDLY; INTERVAL=30;',
+        end_date              => NULL,
+        job_class             => '"DEFAULT_JOB_CLASS"',
+        enabled               => FALSE,
+        auto_drop             => TRUE,
+        comments              => NULL);
+    DBMS_SCHEDULER.enable ('"INTEGRACJA_INFINITE_IN"');
+    
     COMMIT;
 END;
 /
-
 
 COMMIT
 /
