@@ -435,6 +435,7 @@ GROUP BY rndo.symbol_dokumentu,
                                             XMLTABLE ( ''//Order/OrderDetail/Item''
                                                        PASSING xmltype (log1.xml)
                                                        COLUMNS item_num               VARCHAR2 (30) PATH ''/Item/ItemNum'',
+						               item_id                VARCHAR2 (30) PATH ''/Item/ItemID'',
                                                                seller_item_id         VARCHAR2 (30) PATH ''/Item/SellerItemID'',
                                                                name                   VARCHAR2 (70) PATH ''/Item/Name'',                                                               
                                                                unit_of_measure        VARCHAR2 (30) PATH ''/Item/UnitOfMeasure'',                                                               
@@ -451,8 +452,7 @@ GROUP BY rndo.symbol_dokumentu,
                                       WHERE     log1.id = LOG.id
                                             AND inma.indeks = item_xml.seller_item_id
                                             AND (    sori.document_id (+) = sord.id
-                                                 AND sori.item_symbol (+) = item_xml.seller_item_id)
-                                                 AND sori.ordinal (+) = item_xml.item_num) items
+                                                 AND sori.n_01 (+) = item_xml.item_id)) items
                        FROM jg_input_log LOG,
                             lg_documents_templates wzrc,
                             lg_punkty_sprzedazy pusp,
@@ -834,6 +834,14 @@ GROUP BY rndo.symbol_dokumentu,
                   <xsl:for-each select="DESCRIPTION">
                     <PA_POLE_DODATKOWE_T>
                       <NAZWA>ATRYBUT_T03</NAZWA>
+                      <WARTOSC>
+                        <xsl:value-of select="."/>
+                      </WARTOSC>
+                    </PA_POLE_DODATKOWE_T>
+                  </xsl:for-each>
+		  <xsl:for-each select="ITEM_ID">
+                    <PA_POLE_DODATKOWE_T>
+                      <NAZWA>ATRYBUT_N01</NAZWA>
                       <WARTOSC>
                         <xsl:value-of select="."/>
                       </WARTOSC>
