@@ -1530,6 +1530,42 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
     END;
 
 ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION cancel_order (
+        p_operation_id                  IN      jg_output_log.id%TYPE,
+        p_object_type                   IN      jg_sql_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE IS
+------------------------------------------------------------------------------------------------------------------------
+        v_sql_query                     CLOB;
+        v_sord_id                       lg_sal_orders.id%TYPE;
+        v_sord_symbol                   lg_sal_orders.symbol%TYPE;
+        v_sord_type                     VARCHAR2 (1);
+        c_order                         SYS_REFCURSOR;
+    BEGIN
+        v_sql_query  := get_query_from_sql_repository (p_object_type);
+        v_sql_query  := REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
+        
+         OPEN c_order FOR v_sql_query;
+        FETCH c_order
+         INTO v_sord_id,
+              v_sord_symbol,
+              v_sord_type;
+        CLOSE c_order;
+        
+        IF v_sord_id IS NOT NULL
+        THEN
+            Lg_Dosp_Def.Anuluj_Dosp(p_id => v_sord_id);
+            
+        ELSIF v_sord_type != 'A'
+        THEN
+            assert(false, 'Błędny typ zamówienia o symbolu '|| v_sord_symbol||'. Oczekiwano A, uzyskano '||v_sord_type);
+        ELSE
+            assert(false, 'Nie znaleziono zamówienia o symbolu '|| v_sord_symbol);
+        END IF;
+        
+        RETURN v_sord_id;
+    END;
+    
+------------------------------------------------------------------------------------------------------------------------
     PROCEDURE send_error_response (
         pr_operation                    IN      jg_input_log%ROWTYPE ) IS
 ------------------------------------------------------------------------------------------------------------------------
@@ -1544,6 +1580,11 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             v_xml_path    := '/Order/OrderHeader/OrderNumber';
             v_file_name   := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/order_' || pr_operation.file_name;
 
+        ELSIF pr_operation.object_type = 'CANCEL_RESERVATION'
+        THEN
+            v_xml_path    := '/Order/OrderHeader/OrderNumber';
+            v_file_name   := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/cancel_reservations/order_' || pr_operation.file_name;
+        
         ELSIF    pr_operation.object_type = 'NEW_CONTRACTORS'
               OR pr_operation.object_type = 'CUSTOMER_DATA'
         THEN
@@ -1721,6 +1762,51 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                SET xml_response = v_xml_response
              WHERE id = r_operation.id;
 
+        ELSIF r_operation.object_type = 'CANCEL_RESERVATION'
+        THEN
+            BEGIN
+                v_oryginal_id := pa_xmltype.wartosc (px_xml    => xmltype (r_operation.xml),
+                                                     p_sciezka => '/Order/OrderHeader/OrderNumber');
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    v_oryginal_id := 'TO_CHAR(NULL)';
+            END;
+
+            v_sql_query :=
+                   'SELECT ' || v_oryginal_id || ' order_number,
+                           status,
+                           TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
+                           TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
+                           FILE_NAME,
+                           error ERROR_MESSAGE,
+                           (SELECT symbol
+                              FROM lg_sal_orders
+                             WHERE id = inlo.object_id) erp_order_symbol
+                      FROM jg_input_log inlo
+                     WHERE id = ' || r_operation.id;
+
+            v_xml_clob := create_xml (v_sql_query, r_operation.object_type || '_RESPONSE');
+
+            IF v_xml_clob IS NOT NULL
+            THEN
+                BEGIN
+                    jg_output_sync.send_text_file_to_ftp (
+                        p_xml         => v_xml_clob,
+                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/cancel_reservations/order_' || r_operation.file_name);
+
+                    v_xml_response := v_xml_clob;
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                    NULL;
+                END;
+            END IF;
+            
+            UPDATE jg_input_log
+               SET xml_response = v_xml_response
+             WHERE id = r_operation.id;
+             
         ELSIF    r_operation.object_type = 'NEW_CONTRACTORS'
               OR r_operation.object_type = 'CUSTOMER_DATA'
         THEN
@@ -1844,6 +1930,13 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                         p_operation_id   => pr_operation.id,
                         p_object_type    => pr_operation.object_type);
 
+            WHEN 'CANCEL_RESERVATION'
+            THEN
+                v_object_id :=
+                    cancel_order (
+                        p_operation_id   => pr_operation.id,
+                        p_object_type    => pr_operation.object_type);
+                        
             WHEN 'CASH_RECEIPTS'
             THEN
                 v_object_id :=
