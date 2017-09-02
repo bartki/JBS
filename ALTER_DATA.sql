@@ -2,7 +2,27 @@ DECLARE
     v_order_clob   CLOB;
     v_xslt         CLOB;
 BEGIN
-
+    INSERT INTO jg_sql_repository (ID, object_type, sql_query, xslt, file_location, up_to_date, direction)
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'CANCEL_RESERVATION',
+                 'SELECT sord.id,
+                         header.order_number,
+                         header.order_type
+                    FROM jg_input_log LOG,
+                         XMLTABLE ( ''//Order''
+                                    PASSING xmltype (LOG.xml)
+                                    COLUMNS order_number               VARCHAR2 (30)      PATH ''/Order/OrderHeader/OrderNumber'',
+                                            seller_buyer_id            VARCHAR2 (30)      PATH ''/Order/OrderParty/BuyerParty/SellerBuyerID'',
+                                            order_type                 VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderType'' ) header,
+                         lg_sal_orders sord
+                   WHERE (    sord.doc_symbol_rcv(+) = header.order_number
+                          AND sord.payer_symbol(+) = header.seller_buyer_id)
+                          AND LOG.id = :p_operation_id',
+                 NULL,
+                 'OUT/canceled_reservations',
+                 'T',
+                 'IN');
+	    
     INSERT INTO jg_sql_repository (id,
                                    object_type,                                   
                                    file_location,
