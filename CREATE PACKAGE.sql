@@ -1551,15 +1551,15 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
               v_sord_type;
         CLOSE c_order;
         
-        IF v_sord_id IS NOT NULL
+        IF v_sord_id IS NULL
         THEN
-            Lg_Dosp_Def.Anuluj_Dosp(p_id => v_sord_id);
-            
+            assert(false, 'Nie znaleziono zamówienia o symbolu '|| v_sord_symbol);
+        
         ELSIF v_sord_type != 'A'
         THEN
             assert(false, 'Błędny typ zamówienia o symbolu '|| v_sord_symbol||'. Oczekiwano A, uzyskano '||v_sord_type);
         ELSE
-            assert(false, 'Nie znaleziono zamówienia o symbolu '|| v_sord_symbol);
+            Lg_Dosp_Def.Anuluj_Dosp(p_id => v_sord_id);
         END IF;
         
         RETURN v_sord_id;
@@ -1583,7 +1583,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         ELSIF pr_operation.object_type = 'CANCEL_RESERVATION'
         THEN
             v_xml_path    := '/Order/OrderHeader/OrderNumber';
-            v_file_name   := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/cancel_reservations/order_' || pr_operation.file_name;
+            v_file_name   := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/canceled_reservations/order_' || pr_operation.file_name;
         
         ELSIF    pr_operation.object_type = 'NEW_CONTRACTORS'
               OR pr_operation.object_type = 'CUSTOMER_DATA'
@@ -1613,7 +1613,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         END;
 
         v_sql_query :=
-                'SELECT ' || v_oryginal_id || ' order_number,
+                'SELECT ''' || v_oryginal_id || ''' order_number,
                           status,
                           TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                           TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
@@ -1677,7 +1677,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             END;
 
             v_sql_query :=
-                   'SELECT ' || v_oryginal_id || ' order_number,
+                   'SELECT ''' || v_oryginal_id || ''' order_number,
                            status,
                            TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                            TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
@@ -1774,7 +1774,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             END;
 
             v_sql_query :=
-                   'SELECT ' || v_oryginal_id || ' order_number,
+                   'SELECT ''' || v_oryginal_id || ''' order_number,
                            status,
                            TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                            TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
@@ -1793,7 +1793,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 BEGIN
                     jg_output_sync.send_text_file_to_ftp (
                         p_xml         => v_xml_clob,
-                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/cancel_reservations/order_' || r_operation.file_name);
+                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/canceled_reservations/order_' || r_operation.file_name);
 
                     v_xml_response := v_xml_clob;
                 EXCEPTION
@@ -1827,7 +1827,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             END;
 
             v_sql_query :=
-                   'SELECT ' || v_oryginal_id || ' MOBIZID,
+                   'SELECT ''' || v_oryginal_id || ''' MOBIZID,
                            status,
                            TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                            TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
