@@ -5324,8 +5324,13 @@ SELECT upta.symbol discount_number,
        maga.nazwa name,
        CURSOR (
            SELECT inma1.indeks commodity_id,
-                  jg_output_sync.format_number (sum(stma1.stan_goracy), 100)
-                      quantity
+                  jg_output_sync.format_number (sum(stma1.stan_goracy), 100) quantity,
+                   case 
+                   when maga.kod <> '500' then null
+                   when sum(stma1.ilosc) = sum(stma1.ilosc_rozchodowana) then 
+                    (SELECT jg_output_sync.format_number(cena,100) from ap_stany_magazynowe stma where stma.id IN (:p_id))
+                    else jg_output_sync.format_number(round(sum(wartosc)/(sum(stma1.ilosc) - sum(stma1.ilosc_rozchodowana)),2),100) end purchase_price
+                      
              FROM ap_stany_magazynowe stma1,
                   ap_indeksy_materialowe inma1,
                   ap_magazyny maga1
@@ -5339,7 +5344,7 @@ SELECT upta.symbol discount_number,
            stocks
   FROM ap_stany_magazynowe stma, ap_magazyny maga
 WHERE     stma.suob_maga_id = maga.id
-       AND (kod LIKE ''1__'' OR kod in (''500'',''300''))
+       AND (kod LIKE '1__' OR kod in ('500','300'))
        AND stma.suob_inma_id in (SELECT suob_inma_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
        AND stma.suob_maga_id in (SELECT suob_maga_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
 GROUP BY maga.kod, maga.nazwa',
