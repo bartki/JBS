@@ -3998,8 +3998,7 @@ GROUP BY rndo.symbol_dokumentu,
                                           
            groups
   FROM ap_indeksy_materialowe inma
- WHERE inma.aktualny = ''T''
- AND inma.id IN (:p_id)',
+ WHERE inma.id IN (:p_id)',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
