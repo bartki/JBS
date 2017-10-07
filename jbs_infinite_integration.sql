@@ -5320,33 +5320,60 @@ SELECT upta.symbol discount_number,
         VALUES (
                    jg_sqre_seq.NEXTVAL,
                    'WAREHOUSES',
-                   'SELECT maga.kod id,
-       maga.nazwa name,
-       CURSOR (
-           SELECT inma1.indeks commodity_id,
-                  jg_output_sync.format_number (sum(stma1.stan_goracy), 100) quantity,
-                   case 
-                   when maga.kod <> '500' then null
-                   when sum(stma1.ilosc) = sum(stma1.ilosc_rozchodowana) then 
-                    (SELECT jg_output_sync.format_number(cena,100) from ap_stany_magazynowe stma where stma.id IN (:p_id))
-                    else jg_output_sync.format_number(round(sum(wartosc)/(sum(stma1.ilosc) - sum(stma1.ilosc_rozchodowana)),2),100) end purchase_price
-                      
-             FROM ap_stany_magazynowe stma1,
-                  ap_indeksy_materialowe inma1,
-                  ap_magazyny maga1
-            WHERE     inma1.id = stma1.suob_inma_id
-                  AND maga1.id = stma1.suob_maga_id
-                  AND stma1.suob_inma_id in (SELECT suob_inma_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
-                  AND maga1.kod = maga.kod
-                  AND maga1.id in (SELECT suob_maga_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
-                  group by inma1.indeks 
-                  )
-           stocks
-  FROM ap_stany_magazynowe stma, ap_magazyny maga
-WHERE     stma.suob_maga_id = maga.id
-       AND (kod LIKE '1__' OR kod in ('500','300'))
-       AND stma.suob_inma_id in (SELECT suob_inma_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
-       AND stma.suob_maga_id in (SELECT suob_maga_id from ap_stany_magazynowe stma where stma.id IN (:p_id))
+                   ' SELECT maga.kod id,
+         maga.nazwa name,
+         CURSOR (
+             SELECT inma1.indeks commodity_id,
+                    jg_output_sync.format_number (stma2.stan_goracy, 100)
+                        quantity,
+                    CASE
+                        WHEN maga.kod <> ''500''
+                        THEN
+                            NULL
+                        WHEN stma2.ilosc <> stma2.ilosc_rozchodowana
+                        THEN
+                            jg_output_sync.format_number (
+                                ROUND (
+                                      wartosc
+                                    / (stma2.ilosc - stma2.ilosc_rozchodowana),
+                                    2),
+                                100)
+                        ELSE
+                            jg_output_sync.format_number (stma2.cena, 100)
+                    END
+                        purchase_price
+               FROM (  SELECT stma1.suob_inma_id,
+                              stma1.suob_maga_id,
+                              SUM (stma1.ilosc) AS ilosc,
+                              SUM (stma1.stan_goracy) AS stan_goracy,
+                              SUM (stma1.ilosc_rozchodowana)
+                                  AS ilosc_rozchodowana,
+                              SUM (stma1.wartosc) AS wartosc,
+                              stma0.cena AS cena
+                         FROM ap_stany_magazynowe stma1
+                              JOIN (SELECT suob_inma_id, suob_maga_id, cena
+                                      FROM ap_stany_magazynowe stma
+                                     WHERE stma.id IN ( :p_id)) stma0
+                                  ON     stma1.suob_inma_id = stma0.suob_inma_id
+                                     AND stma1.suob_maga_id = stma0.suob_maga_id
+                     GROUP BY stma1.suob_inma_id,
+                              stma1.suob_maga_id,
+                              stma0.cena) stma2,
+                    ap_indeksy_materialowe inma1,
+                    ap_magazyny maga1
+              WHERE     inma1.id = stma2.suob_inma_id
+                    AND maga1.id = stma2.suob_maga_id
+                    AND maga1.kod = maga.kod)
+             stocks
+    FROM ap_stany_magazynowe stma, ap_magazyny maga
+   WHERE     stma.suob_maga_id = maga.id
+         AND (kod LIKE ''1__'' OR kod IN (''500'', ''300''))
+         AND stma.suob_inma_id IN (SELECT suob_inma_id
+                                     FROM ap_stany_magazynowe stma
+                                    WHERE stma.id IN ( :p_id))
+         AND stma.suob_maga_id IN (SELECT suob_maga_id
+                                     FROM ap_stany_magazynowe stma
+                                    WHERE stma.id IN ( :p_id))
 GROUP BY maga.kod, maga.nazwa',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
