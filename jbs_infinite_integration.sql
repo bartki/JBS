@@ -1,4 +1,4 @@
-/* Formatted on 04-cze-2017 17:06:07 (QP5 v5.291) */
+
 CREATE TABLE jg_sql_repository
 (
     id              NUMBER (10, 0),
@@ -1145,14 +1145,13 @@ CREATE OR REPLACE PACKAGE jg_ftp_configuration
 IS
     ------------------------------------------------------------------------------------------------------------------------
 
-    sf_ftp_host                 VARCHAR2 (30) := '193.202.117.201';
-    sf_ftp_user                 VARCHAR2 (30) := 'jbs';
-    sf_ftp_password             VARCHAR2 (30) := 'p6ucuyUk';
-    sf_ftp_port                 PLS_INTEGER   := 21;
+    sf_ftp_host         VARCHAR2 (30) := '193.202.117.201';
+    sf_ftp_user         VARCHAR2 (30) := 'jbs';
+    sf_ftp_password     VARCHAR2 (30) := 'p6ucuyUk';
+    sf_ftp_port         PLS_INTEGER := 21;
 
-    sf_ftp_in_folder            VARCHAR2 (30) := '';    -- OUT na FTP
-    sf_ftp_out_folder           VARCHAR2 (30) := '';    -- IN  na FTP
-    
+    sf_ftp_in_folder    VARCHAR2 (30) := '';                     -- OUT na FTP
+    sf_ftp_out_folder   VARCHAR2 (30) := '';                     -- IN  na FTP
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
@@ -1160,10 +1159,7 @@ END;
 CREATE OR REPLACE PACKAGE jg_output_sync
 IS
     ------------------------------------------------------------------------------------------------------------------------
-    TYPE tt_set_row IS RECORD
-    (
-        id   NUMBER (10, 0)
-    );
+    TYPE tt_set_row IS RECORD (id NUMBER (10, 0));
 
     TYPE tt_set_table IS TABLE OF tt_set_row;
 
@@ -1200,14 +1196,12 @@ IS
             RETURN 0;
         END IF;
 
-        RETURN TRIM (
-                   TRAILING '.' FROM (TRIM (
-                                          TRAILING 0 FROM TRIM (
-                                                              TO_CHAR (
-                                                                  ROUND (
-                                                                      p_number,
-                                                                      p_digit),
-                                                                  '9999999999999999999999999999990.000000000000000000')))));
+        RETURN TRIM (TRAILING '.' FROM (TRIM (TRAILING 0 FROM TRIM (
+                                                                  TO_CHAR (
+                                                                      ROUND (
+                                                                          p_number,
+                                                                          p_digit),
+                                                                      '9999999999999999999999999999990.000000000000000000')))));
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
@@ -1218,8 +1212,8 @@ IS
     BEGIN
         FOR r_sqre
             IN (SELECT *
-                FROM jg_sql_repository sqre
-                WHERE sqre.object_type = p_object_type AND direction = 'OUT')
+                  FROM jg_sql_repository sqre
+                 WHERE sqre.object_type = p_object_type AND direction = 'OUT')
         LOOP
             RETURN r_sqre;
         END LOOP;
@@ -1235,11 +1229,32 @@ IS
         ------------------------------------------------------------------------------------------------------------------------
         PRAGMA AUTONOMOUS_TRANSACTION;
     BEGIN
-        UPDATE jg_observed_operations
-           SET batch_guid = p_batch_guid
-         WHERE     object_type = p_object_type
-               AND batch_guid IS NULL
-               AND ROWNUM < 500;
+        IF p_object_type = 'WAREHOUSES'
+        THEN
+            UPDATE jg_observed_operations
+               SET batch_guid = p_batch_guid
+             WHERE     batch_guid IS NULL
+                   AND object_id IN (SELECT id
+                                       FROM ap_stany_magazynowe
+                                      WHERE (suob_inma_id, suob_maga_id) IN (  SELECT stma.suob_inma_id,
+                                                                                      stma.suob_maga_id
+                                                                                 FROM jg_observed_operations obop,
+                                                                                      ap_stany_magazynowe stma
+                                                                                WHERE     obop.object_id =
+                                                                                              stma.id
+                                                                                      AND ROWNUM <
+                                                                                              100
+                                                                             GROUP BY stma.suob_inma_id,
+                                                                                      stma.suob_maga_id));
+        ELSE
+            UPDATE jg_observed_operations
+               SET batch_guid = p_batch_guid
+             WHERE     object_type = p_object_type
+                   AND batch_guid IS NULL
+                   AND ROWNUM < 500;
+        END IF;
+
+
 
         COMMIT;
     END;
@@ -1301,13 +1316,13 @@ IS
                                    error,
                                    file_name,
                                    guid)
-        VALUES (jg_oulo_seq.NEXTVAL,
-                p_object_type,
-                p_status,
-                p_xml,
-                p_error,
-                p_file_name,
-                p_batch_guid);
+             VALUES (jg_oulo_seq.NEXTVAL,
+                     p_object_type,
+                     p_status,
+                     p_xml,
+                     p_error,
+                     p_file_name,
+                     p_batch_guid);
 
         COMMIT;
     END;
@@ -1420,7 +1435,7 @@ IS
         THEN
             OPEN c_atta (pc_atta_id => p_object_id);
 
-            FETCH c_atta   INTO r_atta;
+            FETCH c_atta INTO r_atta;
 
             CLOSE c_atta;
 
@@ -1466,7 +1481,7 @@ IS
         THEN
             OPEN c_atta (pc_atta_id => p_object_id);
 
-            FETCH c_atta   INTO r_atta;
+            FETCH c_atta INTO r_atta;
 
             CLOSE c_atta;
 
@@ -1493,7 +1508,7 @@ IS
     ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         DELETE FROM jg_observed_operations
-         WHERE batch_guid = p_batch_guid;
+              WHERE batch_guid = p_batch_guid;
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
@@ -1595,21 +1610,28 @@ IS
         c_oper         SYS_REFCURSOR;
         v_count        NUMBER;
     BEGIN
+        UPDATE jg_observed_operations
+           SET batch_guid = NULL
+         WHERE batch_guid IN (SELECT guid
+                                FROM jg_output_log
+                               WHERE status = 'ERROR');
+
+
         LOOP
             OPEN c_oper FOR
                 SELECT COUNT (id)
                   FROM jg_observed_operations
                  WHERE batch_guid IS NULL AND attachment = 'N';
 
-            FETCH c_oper   INTO v_count;
+            FETCH c_oper INTO v_count;
 
             CLOSE c_oper;
 
             EXIT WHEN v_count = 0;
 
-            FOR r_operation IN (SELECT object_type
-                                FROM jg_observed_operations
-                                WHERE attachment = 'N'
+            FOR r_operation IN (  SELECT object_type
+                                    FROM jg_observed_operations
+                                   WHERE attachment = 'N'
                                 GROUP BY object_type
                                 ORDER BY object_type)
             LOOP
@@ -1663,8 +1685,8 @@ IS
 
 
         FOR r_operation IN (SELECT *
-                            FROM jg_output_log
-                            WHERE status = 'READY')
+                              FROM jg_output_log
+                             WHERE status = 'READY')
         LOOP
             v_status := NULL;
 
@@ -1707,8 +1729,8 @@ IS
         END LOOP;
 
         FOR r_operation IN (SELECT *
-                            FROM jg_observed_operations
-                            WHERE attachment = 'T')
+                              FROM jg_observed_operations
+                             WHERE attachment = 'T')
         LOOP
             SAVEPOINT send_atta;
 
@@ -1726,7 +1748,7 @@ IS
                              p_status        => 'PROCESSED');
 
                 DELETE FROM jg_observed_operations
-                 WHERE id = r_operation.id;
+                      WHERE id = r_operation.id;
             EXCEPTION
                 WHEN OTHERS
                 THEN
@@ -1744,6 +1766,7 @@ IS
     END;
 
     ------------------------------------------------------------------------------------------------------------------------
+
     PROCEDURE retry (p_id IN jg_output_log.id%TYPE)
     IS
     ------------------------------------------------------------------------------------------------------------------------
@@ -1751,10 +1774,12 @@ IS
         NULL;
     END;
 ------------------------------------------------------------------------------------------------------------------------
+
 END;
 /
 
 
+-- End of DDL Script for Package Body TETA_ADMIN.JG_OUTPUT_SYNC
 CREATE OR REPLACE PACKAGE jg_input_sync
 IS
     ------------------------------------------------------------------------------------------------------------------------
@@ -1765,12 +1790,13 @@ IS
 END;
 /
 
-CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION inlo_rt (
-        p_id                            IN      jg_input_log.id%TYPE )
-        RETURN jg_input_log%ROWTYPE IS
-------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE PACKAGE BODY jg_input_sync
+IS
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION inlo_rt (p_id IN jg_input_log.id%TYPE)
+        RETURN jg_input_log%ROWTYPE
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         FOR r_inlo IN (SELECT *
                          FROM jg_input_log inlo
@@ -1782,13 +1808,15 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN NULL;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_query_from_sql_repository (
-        p_object_type                   IN      jg_input_log.object_type%TYPE)
-        RETURN jg_sql_repository.sql_query%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
+        p_object_type   IN jg_input_log.object_type%TYPE)
+        RETURN jg_sql_repository.sql_query%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         CURSOR c_sql_query (
-            pc_object_type              jg_sql_repository.object_type%TYPE) IS
+            pc_object_type    jg_sql_repository.object_type%TYPE)
+        IS
             SELECT sql_query
               FROM jg_sql_repository
              WHERE object_type = pc_object_type;
@@ -1796,54 +1824,66 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         v_sql_query   jg_sql_repository.sql_query%TYPE;
     BEGIN
         OPEN c_sql_query (p_object_type);
-        FETCH c_sql_query
-         INTO v_sql_query;
+
+        FETCH c_sql_query INTO v_sql_query;
+
         CLOSE c_sql_query;
 
         IF v_sql_query IS NULL
         THEN
-            assert (FALSE, 'Brak zdefiniowanego zapytania dla obiektu o typie ''' || p_object_type || '');
+            assert (
+                FALSE,
+                   'Brak zdefiniowanego zapytania dla obiektu o typie '''
+                || p_object_type
+                || '');
         END IF;
 
         RETURN v_sql_query;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION get_xslt_from_repository (
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE)
-        RETURN jg_sql_repository.xslt%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        CURSOR c_xslt (
-            pc_object_type              jg_sql_repository.object_type%TYPE ) IS
+        p_object_type   IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_sql_repository.xslt%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_xslt (pc_object_type jg_sql_repository.object_type%TYPE)
+        IS
             SELECT xslt
               FROM jg_sql_repository
              WHERE object_type = pc_object_type;
 
         v_xslt   jg_sql_repository.xslt%TYPE;
     BEGIN
-         OPEN c_xslt (p_object_type);
-        FETCH c_xslt
-         INTO v_xslt;
+        OPEN c_xslt (p_object_type);
+
+        FETCH c_xslt INTO v_xslt;
+
         CLOSE c_xslt;
 
         IF v_xslt IS NULL
         THEN
-            assert (FALSE, 'Brak zdefiniowanego szablonu xslt dla obiektu o typie ''' || p_object_type || '');
+            assert (
+                FALSE,
+                   'Brak zdefiniowanego szablonu xslt dla obiektu o typie '''
+                || p_object_type
+                || '');
         END IF;
 
         RETURN v_xslt;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION create_xml (
-        p_sql_query                     IN      jg_sql_repository.sql_query%TYPE,
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE,
-        p_rowsettag                     IN      jg_sql_repository.object_type%TYPE DEFAULT NULL )
-        RETURN CLOB IS
-  ------------------------------------------------------------------------------------------------------------------------
-          v_ctx                         DBMS_XMLSAVE.ctxtype;
-        v_xml                           CLOB;
-        r_current_format                pa_xmltype.tr_format;
+        p_sql_query     IN jg_sql_repository.sql_query%TYPE,
+        p_object_type   IN jg_sql_repository.object_type%TYPE,
+        p_rowsettag     IN jg_sql_repository.object_type%TYPE DEFAULT NULL)
+        RETURN CLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_ctx              DBMS_XMLSAVE.ctxtype;
+        v_xml              CLOB;
+        r_current_format   pa_xmltype.tr_format;
     BEGIN
         r_current_format := pa_xmltype.biezacy_format;
         pa_xmltype.ustaw_format_xml ();
@@ -1865,17 +1905,18 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN v_xml;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION transform_xml (
-        p_xml                           IN      CLOB,
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE,
-        p_xslt                          IN      CLOB DEFAULT NULL)
-        RETURN XMLTYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xslt                          jg_sql_repository.xslt%TYPE := p_xslt;
-        v_xml                           XMLTYPE;
-        r_current_format                pa_xmltype.tr_format;
-        v_result                        XMLTYPE;
+        p_xml           IN CLOB,
+        p_object_type   IN jg_sql_repository.object_type%TYPE,
+        p_xslt          IN CLOB DEFAULT NULL)
+        RETURN XMLTYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xslt             jg_sql_repository.xslt%TYPE := p_xslt;
+        v_xml              XMLTYPE;
+        r_current_format   pa_xmltype.tr_format;
+        v_result           XMLTYPE;
     BEGIN
         r_current_format := pa_xmltype.biezacy_format;
         pa_xmltype.ustaw_format_xml ();
@@ -1892,13 +1933,14 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN v_result;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     PROCEDURE save_result (
-        p_inlo_id                       IN      jg_input_log.id%TYPE,
-        p_status                        IN      jg_input_log.status%TYPE,
-        p_object_id                     IN      jg_input_log.object_id%TYPE,
-        p_error                         IN      jg_input_log.error%TYPE DEFAULT NULL) IS
-------------------------------------------------------------------------------------------------------------------------
+        p_inlo_id     IN jg_input_log.id%TYPE,
+        p_status      IN jg_input_log.status%TYPE,
+        p_object_id   IN jg_input_log.object_id%TYPE,
+        p_error       IN jg_input_log.error%TYPE DEFAULT NULL)
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         UPDATE jg_input_log
            SET status = p_status,
@@ -1908,32 +1950,50 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
          WHERE id = p_inlo_id;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_customer (
-        p_xml                           IN      CLOB,
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE )
-        RETURN jg_input_log.object_id%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xml                           XMLTYPE;
-        v_core_ns              CONSTANT VARCHAR2 (200) := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"' ;
-        v_okreg_id                      ap_okregi_sprzedazy.id%TYPE;
-        v_symbol                        ap_kontrahenci.symbol%TYPE;
+        p_xml           IN CLOB,
+        p_object_type   IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xml                XMLTYPE;
+        v_core_ns   CONSTANT VARCHAR2 (200)
+            := 'xmlns="http://www.teta.com.pl/teta2000/kontrahent-1"' ;
+        v_okreg_id           ap_okregi_sprzedazy.id%TYPE;
+        v_symbol             ap_kontrahenci.symbol%TYPE;
     BEGIN
-        v_xml    := transform_xml (p_xml => p_xml, p_object_type => p_object_type);
-        v_symbol := pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns);
+        v_xml := transform_xml (p_xml => p_xml, p_object_type => p_object_type);
+        v_symbol :=
+            pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SYMBOL', v_core_ns);
 
         IF v_symbol IS NULL
         THEN
             SELECT 'NKKX' || jbs_mp_nkk_kln.NEXTVAL INTO v_symbol FROM DUAL;
         END IF;
 
-        v_xml      := xmltype.APPENDCHILDXML (v_xml, 'PA_KONTRAHENT_TK', xmltype ('<SYMBOL>' || v_symbol || '</SYMBOL>'), v_core_ns);
-        v_okreg_id := pa_xmltype.wartosc (v_xml, '/PA_KONTRAHENT_TK/SALES_REPRESENTATIVE_ID', v_core_ns);
+        v_xml :=
+            xmltype.APPENDCHILDXML (
+                v_xml,
+                'PA_KONTRAHENT_TK',
+                xmltype ('<SYMBOL>' || v_symbol || '</SYMBOL>'),
+                v_core_ns);
+        v_okreg_id :=
+            pa_xmltype.wartosc (v_xml,
+                                '/PA_KONTRAHENT_TK/SALES_REPRESENTATIVE_ID',
+                                v_core_ns);
 
         IF v_okreg_id IS NOT NULL
         THEN
-            v_xml := xmltype.APPENDCHILDXML (v_xml, 'PA_KONTRAHENT_TK', xmltype ('<OKREG_SPRZEDAZY>' || lg_okgi_sql.rt (p_id => v_okreg_id).symbol
-                        || '</OKREG_SPRZEDAZY>'), v_core_ns);
+            v_xml :=
+                xmltype.APPENDCHILDXML (
+                    v_xml,
+                    'PA_KONTRAHENT_TK',
+                    xmltype (
+                           '<OKREG_SPRZEDAZY>'
+                        || lg_okgi_sql.rt (p_id => v_okreg_id).symbol
+                        || '</OKREG_SPRZEDAZY>'),
+                    v_core_ns);
         END IF;
 
         apix_lg_konr.update_obj (p_konr                           => v_xml.getclobval,
@@ -1943,12 +2003,12 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN lg_konr_sql.id (p_symbol => v_symbol);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION to_money (
-        p_value                         IN        VARCHAR2)
-        RETURN NUMBER IS
-------------------------------------------------------------------------------------------------------------------------
-        v_value                         NUMBER (10, 2);
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION to_money (p_value IN VARCHAR2)
+        RETURN NUMBER
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_value   NUMBER (10, 2);
     BEGIN
         SELECT TO_NUMBER (REGEXP_REPLACE (p_value, '[,.]', TRIM (VALUE)))
           INTO v_value
@@ -1958,33 +2018,41 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN ROUND (v_value, 2);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION determine_order_symbol (
-        p_order_xml                     IN      XMLTYPE,
-        po_should_calculate             OUT     BOOLEAN )
-        RETURN lg_sal_orders.symbol%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        CURSOR c_sord (
-            pc_doc_symbol_rcv           lg_sal_orders.doc_symbol_rcv%TYPE) IS
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION determine_order_symbol (p_order_xml           IN     XMLTYPE,
+                                     po_should_calculate      OUT BOOLEAN)
+        RETURN lg_sal_orders.symbol%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        CURSOR c_sord (pc_doc_symbol_rcv lg_sal_orders.doc_symbol_rcv%TYPE)
+        IS
             SELECT symbol
               FROM lg_sal_orders sord
              WHERE sord.doc_symbol_rcv = pc_doc_symbol_rcv;
 
-        v_wzrc_id                       lg_documents_templates.id%TYPE;
-        v_data_realizacji               lg_sal_orders.realization_date%TYPE;
-        v_doc_symbol_rcv                lg_sal_orders.doc_symbol_rcv%TYPE;
-        v_symbol                        lg_sal_orders.symbol%TYPE;
-        v_cinn_id                       lg_sal_orders.cinn_id%TYPE;
-        v_numer                         NUMBER;
+        v_wzrc_id           lg_documents_templates.id%TYPE;
+        v_data_realizacji   lg_sal_orders.realization_date%TYPE;
+        v_doc_symbol_rcv    lg_sal_orders.doc_symbol_rcv%TYPE;
+        v_symbol            lg_sal_orders.symbol%TYPE;
+        v_cinn_id           lg_sal_orders.cinn_id%TYPE;
+        v_numer             NUMBER;
     BEGIN
         po_should_calculate := FALSE;
-        v_wzrc_id           := lg_wzrc_sql.id (p_wzorzec => pa_xmltype.wartosc (p_order_xml, '/LG_ZASP_T/WZORZEC'));
-        v_data_realizacji   := TO_DATE (pa_xmltype.wartosc (p_order_xml, '/LG_ZASP_T/DATA_REALIZACJI'), 'YYYY-MM-DD"T"HH24:MI:SS".0000000+02:00"');
-        v_doc_symbol_rcv    := pa_xmltype.wartosc (p_order_xml, '/ORDER/ORDER_NUMBER');
+        v_wzrc_id :=
+            lg_wzrc_sql.id (
+                p_wzorzec   => pa_xmltype.wartosc (p_order_xml,
+                                                   '/LG_ZASP_T/WZORZEC'));
+        v_data_realizacji :=
+            TO_DATE (
+                pa_xmltype.wartosc (p_order_xml,
+                                    '/LG_ZASP_T/DATA_REALIZACJI'),
+                'YYYY-MM-DD"T"HH24:MI:SS".0000000+02:00"');
+        v_doc_symbol_rcv :=
+            pa_xmltype.wartosc (p_order_xml, '/ORDER/ORDER_NUMBER');
 
-         OPEN c_sord (v_doc_symbol_rcv);
-        FETCH c_sord
-         INTO v_symbol;
+        OPEN c_sord (v_doc_symbol_rcv);
+
+        FETCH c_sord INTO v_symbol;
 
         IF c_sord%NOTFOUND
         THEN
@@ -2004,94 +2072,114 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN v_symbol;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION get_order_reserv_query (
-        p_sord_id                       IN      lg_sal_orders.id%TYPE )
-        RETURN CLOB IS
-------------------------------------------------------------------------------------------------------------------------
-        v_rese_sql_query                CLOB;
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION get_order_reserv_query (p_sord_id IN lg_sal_orders.id%TYPE)
+        RETURN CLOB
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_rese_sql_query   CLOB;
     BEGIN
-        v_rese_sql_query := get_query_from_sql_repository(p_object_type => 'RESERVATIONS');
-        RETURN REPLACE (v_rese_sql_query, 'AND reze.id IN (:p_id)', 'AND sord.id = ' || p_sord_id);
+        v_rese_sql_query :=
+            get_query_from_sql_repository (p_object_type => 'RESERVATIONS');
+        RETURN REPLACE (v_rese_sql_query,
+                        'AND reze.id IN (:p_id)',
+                        'AND sord.id = ' || p_sord_id);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION check_reservations (
-        p_sord_id                       IN      lg_sal_orders.id%TYPE )
-        RETURN BOOLEAN IS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION check_reservations (p_sord_id IN lg_sal_orders.id%TYPE)
+        RETURN BOOLEAN
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
         CURSOR c_reserv (
-            pc_sord_id                       IN      lg_sal_orders.id%TYPE ) IS
+            pc_sord_id   IN lg_sal_orders.id%TYPE)
+        IS
             SELECT 'N'
               FROM lg_rzm_zadania_rezerwacji zare,
                    lg_sal_orders_it sori,
                    lg_rzm_rezerwacje reze
              WHERE     sori.id = zare.zrre_id
-                   AND reze.zare_id (+) = zare.id
-                   AND sori.document_id = pc_sord_id 
-                   AND zare.ilosc > NVL(reze.ilosc_zarezerwowana, 0) + NVL(reze.ilosc_pobrana, 0);
-        
-        v_reserv                        VARCHAR2(1);
-        v_result                        BOOLEAN;
-------------------------------------------------------------------------------------------------------------------------
+                   AND reze.zare_id(+) = zare.id
+                   AND sori.document_id = pc_sord_id
+                   AND zare.ilosc >
+                             NVL (reze.ilosc_zarezerwowana, 0)
+                           + NVL (reze.ilosc_pobrana, 0);
+
+        v_reserv   VARCHAR2 (1);
+        v_result   BOOLEAN;
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
-         OPEN c_reserv(p_sord_id);
-        FETCH c_reserv
-         INTO v_reserv;
-        
+        OPEN c_reserv (p_sord_id);
+
+        FETCH c_reserv INTO v_reserv;
+
         IF c_reserv%FOUND
         THEN
             v_result := FALSE;
         ELSE
             v_result := TRUE;
         END IF;
-        
+
         CLOSE c_reserv;
-        
+
         RETURN v_result;
     END;
-    
-------------------------------------------------------------------------------------------------------------------------
-    FUNCTION import_cash_receipts (
-        p_operation_id                  IN      jg_input_log.id%TYPE )
-        RETURN jg_input_log.object_id%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        r_ksks                          rk_ks_kasy%ROWTYPE;
-        v_konr_id                       ap_kontrahenci.id%TYPE;
-        v_ksrk_guid                     rk_ks_raporty_kasowe.guid%TYPE;
-        vr_document                     api_rk_ks_ksdk.tr_document;
-        vr_payment                      api_rk_ks_ksdk.tr_payment;
-        v_ksdk_guid                     rk_ks_dokumenty_kasowe.guid%TYPE;
-        v_ksdk_id                       rk_ks_dokumenty_kasowe.id%TYPE;
-        v_kasjer_id                     rk_ks_dokumenty_kasowe.kasjer_id%TYPE;
-        v_kasjer_imie                   rk_ks_dokumenty_kasowe.kasjer_imie%TYPE;
-        v_kasjer_nazwisko               rk_ks_dokumenty_kasowe.kasjer_nazwisko%TYPE;
-        v_dosp_id                       lg_sal_invoices.id%TYPE;
-        r_plat                          lg_dosp_platnosci%ROWTYPE;
-        r_ksrk                          rk_ks_raporty_kasowe%ROWTYPE;
+
+    ------------------------------------------------------------------------------------------------------------------------
+    FUNCTION import_cash_receipts (p_operation_id IN jg_input_log.id%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        r_ksks              rk_ks_kasy%ROWTYPE;
+        v_konr_id           ap_kontrahenci.id%TYPE;
+        v_ksrk_guid         rk_ks_raporty_kasowe.guid%TYPE;
+        vr_document         api_rk_ks_ksdk.tr_document;
+        vr_payment          api_rk_ks_ksdk.tr_payment;
+        v_ksdk_guid         rk_ks_dokumenty_kasowe.guid%TYPE;
+        v_ksdk_id           rk_ks_dokumenty_kasowe.id%TYPE;
+        v_kasjer_id         rk_ks_dokumenty_kasowe.kasjer_id%TYPE;
+        v_kasjer_imie       rk_ks_dokumenty_kasowe.kasjer_imie%TYPE;
+        v_kasjer_nazwisko   rk_ks_dokumenty_kasowe.kasjer_nazwisko%TYPE;
+        v_dosp_id           lg_sal_invoices.id%TYPE;
+        r_plat              lg_dosp_platnosci%ROWTYPE;
+        r_ksrk              rk_ks_raporty_kasowe%ROWTYPE;
     BEGIN
-        FOR r_ksdk IN ( SELECT cash_receipt.*
-                          FROM jg_input_log LOG,
-                               XMLTABLE (
-                                         '//NewKPConfirmation'
-                                         PASSING xmltype (LOG.xml)
-                                         COLUMNS description           VARCHAR2 (200) PATH '/NewKPConfirmation/PaymentTitle',
-                                                 cash_receipt_date     VARCHAR2 (30)  PATH '/NewKPConfirmation/DateOfCashCollection',
-                                                 cash_paid             VARCHAR2 (30)  PATH '/NewKPConfirmation/CollectedAmountTotal',
-                                                 konr_symbol           VARCHAR2 (30)  PATH '/NewKPConfirmation/CustomerID',
-                                                 cash_register_symbol  VARCHAR2 (100) PATH '/NewKPConfirmation/BillingAccountNumber',
-                                                 cash_receipt_number_1 VARCHAR2 (100) PATH '/NewKPConfirmation/KPNumber',
-                                                 cash_receipt_number_2 VARCHAR2 (100) PATH '/NewKPConfirmation/ExternalKPNumber') cash_receipt
-                         WHERE LOG.id = p_operation_id)
+        FOR r_ksdk
+            IN (                  SELECT cash_receipt.*
+                                    FROM jg_input_log LOG,
+                                         XMLTABLE (
+                                             '//NewKPConfirmation'
+                                             PASSING xmltype (LOG.xml)
+                                             COLUMNS description             VARCHAR2 (200)
+                                                                                 PATH '/NewKPConfirmation/PaymentTitle',
+                                                     cash_receipt_date       VARCHAR2 (30)
+                                                                                 PATH '/NewKPConfirmation/DateOfCashCollection',
+                                                     cash_paid               VARCHAR2 (30)
+                                                                                 PATH '/NewKPConfirmation/CollectedAmountTotal',
+                                                     konr_symbol             VARCHAR2 (30)
+                                                                                 PATH '/NewKPConfirmation/CustomerID',
+                                                     cash_register_symbol    VARCHAR2 (100)
+                                                                                 PATH '/NewKPConfirmation/BillingAccountNumber',
+                                                     cash_receipt_number_1   VARCHAR2 (100)
+                                                                                 PATH '/NewKPConfirmation/KPNumber',
+                                                     cash_receipt_number_2   VARCHAR2 (100)
+                                                                                 PATH '/NewKPConfirmation/ExternalKPNumber') cash_receipt
+                                   WHERE LOG.id = p_operation_id)
         LOOP
-            IF NOT rk_kska_sql.exists_by_symbol (p_symbol => r_ksdk.cash_register_symbol)
+            IF NOT rk_kska_sql.exists_by_symbol (
+                       p_symbol   => r_ksdk.cash_register_symbol)
             THEN
                 pa_bledy.wywolaj_bld (
                     p_nr_bledu      => -20001,
-                    p_tekst_bledu   => 'Nie istnieje kasa o symbolu: ' || r_ksdk.cash_register_symbol);
+                    p_tekst_bledu   =>    'Nie istnieje kasa o symbolu: '
+                                       || r_ksdk.cash_register_symbol);
             END IF;
 
-            r_ksks := rk_kska_sql.rt (p_id => rk_kska_sql.id_by_symbol (p_symbol => r_ksdk.cash_register_symbol), p_raise => FALSE);
+            r_ksks :=
+                rk_kska_sql.rt (
+                    p_id      => rk_kska_sql.id_by_symbol (
+                                    p_symbol   => r_ksdk.cash_register_symbol),
+                    p_raise   => FALSE);
 
             IF r_ksdk.konr_symbol IS NOT NULL
             THEN
@@ -2099,10 +2187,12 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 THEN
                     pa_bledy.wywolaj_bld (
                         p_nr_bledu      => -20001,
-                        p_tekst_bledu   => 'Nie istnieje kontrahent o symbolu: ' || r_ksdk.konr_symbol);
+                        p_tekst_bledu   =>    'Nie istnieje kontrahent o symbolu: '
+                                           || r_ksdk.konr_symbol);
                 END IF;
 
-                v_konr_id := lg_konr_sql.id_uk1 (p_symbol => r_ksdk.konr_symbol);
+                v_konr_id :=
+                    lg_konr_sql.id_uk1 (p_symbol => r_ksdk.konr_symbol);
             END IF;
 
             FOR r_exists IN (SELECT symbol_dokumentu
@@ -2117,16 +2207,23 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                                        || r_exists.symbol_dokumentu);
             END LOOP;
 
-            vr_document.konr_id     := v_konr_id;
-            vr_document.cash_paid   := to_money (r_ksdk.cash_paid);
-            vr_document.date        := TRUNC (TO_DATE (REPLACE (r_ksdk.cash_receipt_date, 'T', ' '), 'YYYY-MM-DD hh24:mi:ss'), 'DD');
+            vr_document.konr_id := v_konr_id;
+            vr_document.cash_paid := to_money (r_ksdk.cash_paid);
+            vr_document.date :=
+                TRUNC (
+                    TO_DATE (REPLACE (r_ksdk.cash_receipt_date, 'T', ' '),
+                             'YYYY-MM-DD hh24:mi:ss'),
+                    'DD');
             vr_document.description := r_ksdk.description;
-            vr_document.subtype     := 'KP201';
-            v_ksrk_guid             := api_rk_ks_ksrk.current_cash_report (p_kska_id => r_ksks.id, p_currency => 'PLN');
+            vr_document.subtype := 'KP201';
+            v_ksrk_guid :=
+                api_rk_ks_ksrk.current_cash_report (p_kska_id    => r_ksks.id,
+                                                    p_currency   => 'PLN');
 
             IF v_ksrk_guid IS NOT NULL
             THEN
-                r_ksrk := rk_ksrk_sql.rt (rk_ksrk_sql.id_by_guid (v_ksrk_guid));
+                r_ksrk :=
+                    rk_ksrk_sql.rt (rk_ksrk_sql.id_by_guid (v_ksrk_guid));
 
                 IF r_ksrk.data_do < TRUNC (vr_document.date)
                 THEN
@@ -2151,44 +2248,57 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 api_rk_ks_ksdk.create_document (p_ksrk_guid   => v_ksrk_guid,
                                                 pr_document   => vr_document);
 
-            FOR r_payments IN (SELECT cash_payments.*
+            FOR r_payments
+                IN (           SELECT cash_payments.*
                                  FROM jg_input_log LOG,
-                                      XMLTABLE ( '//NewKPConfirmation/Items/Item'
-                                                 PASSING xmltype (LOG.xml)
-                                                 COLUMNS payments_no      VARCHAR2 (200) PATH '/Item/ItemNumber',
-                                                         paid_amount      VARCHAR2 (30)  PATH '/Item/CollectedAmount',
-                                                         invoice_symbol   VARCHAR2 (30)  PATH '/Item/InvoiceNumber') cash_payments
+                                      XMLTABLE (
+                                          '//NewKPConfirmation/Items/Item'
+                                          PASSING xmltype (LOG.xml)
+                                          COLUMNS payments_no      VARCHAR2 (200)
+                                                                       PATH '/Item/ItemNumber',
+                                                  paid_amount      VARCHAR2 (30)
+                                                                       PATH '/Item/CollectedAmount',
+                                                  invoice_symbol   VARCHAR2 (30)
+                                                                       PATH '/Item/InvoiceNumber') cash_payments
                                 WHERE LOG.id = p_operation_id)
             LOOP
                 IF     r_payments.invoice_symbol IS NOT NULL
-                   AND lg_dosp_sql.istnieje (p_symbol => r_payments.invoice_symbol)
+                   AND lg_dosp_sql.istnieje (
+                           p_symbol   => r_payments.invoice_symbol)
                 THEN
-                    v_dosp_id := lg_dosp_sql.id (p_symbol => r_payments.invoice_symbol);
-                    r_plat    := lg_dosp_plat_sql.rt (p_id => lg_dosp_plat_sql.id_pierwszej_platnosci (p_dosp_id => v_dosp_id));
+                    v_dosp_id :=
+                        lg_dosp_sql.id (p_symbol => r_payments.invoice_symbol);
+                    r_plat :=
+                        lg_dosp_plat_sql.rt (
+                            p_id   => lg_dosp_plat_sql.id_pierwszej_platnosci (
+                                         p_dosp_id   => v_dosp_id));
 
                     vr_payment := NULL;
 
-                    vr_payment.symbol      := r_plat.symbol_platnosci;
-                    vr_payment.guid        := r_plat.guid;
-                    vr_payment.date        := r_plat.data_platnosci;
-                    vr_payment.form        := r_plat.foza_kod;
-                    vr_payment.paid_amount := to_money (r_payments.paid_amount);
+                    vr_payment.symbol := r_plat.symbol_platnosci;
+                    vr_payment.guid := r_plat.guid;
+                    vr_payment.date := r_plat.data_platnosci;
+                    vr_payment.form := r_plat.foza_kod;
+                    vr_payment.paid_amount :=
+                        to_money (r_payments.paid_amount);
 
                     api_rk_ks_ksdk.create_payment (
                         p_ksdk_guid   => v_ksdk_guid,
                         pr_payment    => vr_payment);
                 ELSE
-                    vr_payment             := NULL;
-                    vr_payment.symbol      := r_payments.invoice_symbol;
-                    vr_payment.paid_amount := to_money (r_payments.paid_amount);
+                    vr_payment := NULL;
+                    vr_payment.symbol := r_payments.invoice_symbol;
+                    vr_payment.paid_amount :=
+                        to_money (r_payments.paid_amount);
 
-                    api_rk_ks_ksdk.create_payment (p_ksdk_guid   => v_ksdk_guid,
-                                                   pr_payment    => vr_payment);
+                    api_rk_ks_ksdk.create_payment (
+                        p_ksdk_guid   => v_ksdk_guid,
+                        pr_payment    => vr_payment);
                 END IF;
             END LOOP;
 
-            v_kasjer_id       := NULL;
-            v_kasjer_imie     := NULL;
+            v_kasjer_id := NULL;
+            v_kasjer_imie := NULL;
             v_kasjer_nazwisko := NULL;
 
             FOR r_osob IN (SELECT prac_id, imie, nazwisko
@@ -2215,34 +2325,43 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         RETURN v_ksdk_id;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION import_sale_order (
-        p_operation_id                  IN      jg_output_log.id%TYPE,
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE)
-        RETURN jg_input_log.object_id%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xml                           XMLTYPE;
-        v_xml_clob                      CLOB;
-        v_sql_query                     CLOB;
-        v_symbol                        lg_sal_orders.symbol%TYPE;
-        v_sord_id                       lg_sal_orders.id%TYPE;
-        v_order_type                    VARCHAR2 (1);
-        v_should_calculate              BOOLEAN := FALSE;
-        v_rese_xml_clob                 CLOB;
-        v_rese_xml                      XMLTYPE;
-        v_price                         lg_sal_orders_it.net_price%TYPE;
+        p_operation_id   IN jg_output_log.id%TYPE,
+        p_object_type    IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xml                XMLTYPE;
+        v_xml_clob           CLOB;
+        v_sql_query          CLOB;
+        v_symbol             lg_sal_orders.symbol%TYPE;
+        v_sord_id            lg_sal_orders.id%TYPE;
+        v_order_type         VARCHAR2 (1);
+        v_should_calculate   BOOLEAN := FALSE;
+        v_rese_xml_clob      CLOB;
+        v_rese_xml           XMLTYPE;
+        v_price              lg_sal_orders_it.net_price%TYPE;
     BEGIN
         pa_wass_def.ustaw (p_nazwa => 'IMPORT_INFINITE', p_wartosc => 'T');
 
-        v_sql_query  := get_query_from_sql_repository (p_object_type);
-        v_sql_query  := REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
-        v_xml_clob   := create_xml (v_sql_query, p_object_type);
+        v_sql_query := get_query_from_sql_repository (p_object_type);
+        v_sql_query :=
+            REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
+        v_xml_clob := create_xml (v_sql_query, p_object_type);
 
-        v_order_type := pa_xmltype.wartosc (xmltype (v_xml_clob), '/ORDER/ORDER_TYPE');
-        v_xml        := transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
+        v_order_type :=
+            pa_xmltype.wartosc (xmltype (v_xml_clob), '/ORDER/ORDER_TYPE');
+        v_xml :=
+            transform_xml (p_xml => v_xml_clob, p_object_type => p_object_type);
 
-        v_symbol := determine_order_symbol(v_xml, v_should_calculate);
-        v_xml    := xmltype.APPENDCHILDXML (v_xml, 'LG_ZASP_T', xmltype ('<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));        
+        v_symbol := determine_order_symbol (v_xml, v_should_calculate);
+        v_xml :=
+            xmltype.APPENDCHILDXML (
+                v_xml,
+                'LG_ZASP_T',
+                xmltype (
+                    '<SYMBOL_DOKUMENTU>' || v_symbol || '</SYMBOL_DOKUMENTU>'));
 
         apix_lg_zasp.aktualizuj (p_zamowienie => v_xml.getclobval);
         v_sord_id := lg_sord_sql.id_symbol (p_symbol => v_symbol);
@@ -2254,18 +2373,27 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                             WHERE sori.document_id = v_sord_id)
             LOOP
                 lg_dosi_def.przelicz_wartosci_na_dosi (
-                    po_cena                      => v_price,
-                    po_wartosc_brutto            => r_dosi.gross_value,
-                    po_wartosc_netto             => r_dosi.net_value,
-                    po_wartosc_vat               => r_dosi.vat_value,
-                    p_cena_z_cennika             => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.price_from_list_n, r_dosi.price_from_list_g),
-                    p_ilosc                      => r_dosi.quantity,
-                    p_stva_id                    => r_dosi.stva_id,
-                    p_upust_cj_z_global          => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.discount_unit_price_glb_n, r_dosi.discount_unit_price_glb_g),
-                    p_upust_cj_z_pozycji         => pa_liczba.jezeli (r_dosi.doc_pricing_type = 'N', r_dosi.discount_unit_price_line_n, r_dosi.discount_unit_price_line_g),
-                    p_obciazenie_zwolnienie_ceny => r_dosi.price_difference,
-                    p_wg_cen                     => r_dosi.doc_pricing_type,
-                    p_typ_faktury                => r_dosi.doc_type);
+                    po_cena                        => v_price,
+                    po_wartosc_brutto              => r_dosi.gross_value,
+                    po_wartosc_netto               => r_dosi.net_value,
+                    po_wartosc_vat                 => r_dosi.vat_value,
+                    p_cena_z_cennika               => pa_liczba.jezeli (
+                                                         r_dosi.doc_pricing_type = 'N',
+                                                         r_dosi.price_from_list_n,
+                                                         r_dosi.price_from_list_g),
+                    p_ilosc                        => r_dosi.quantity,
+                    p_stva_id                      => r_dosi.stva_id,
+                    p_upust_cj_z_global            => pa_liczba.jezeli (
+                                                         r_dosi.doc_pricing_type = 'N',
+                                                         r_dosi.discount_unit_price_glb_n,
+                                                         r_dosi.discount_unit_price_glb_g),
+                    p_upust_cj_z_pozycji           => pa_liczba.jezeli (
+                                                         r_dosi.doc_pricing_type   = 'N',
+                                                         r_dosi.discount_unit_price_line_n,
+                                                         r_dosi.discount_unit_price_line_g),
+                    p_obciazenie_zwolnienie_ceny   => r_dosi.price_difference,
+                    p_wg_cen                       => r_dosi.doc_pricing_type,
+                    p_typ_faktury                  => r_dosi.doc_type);
 
                 IF r_dosi.doc_pricing_type = 'N'
                 THEN
@@ -2282,92 +2410,109 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
 
         IF lg_sord_agd.global_discount (p_id => v_sord_id) != 0
         THEN
-            lg_dosp_def.zmien_dolaczono_upust_glb (p_dosp_id => v_sord_id, p_dolaczono_upust_glb => 'T');
+            lg_dosp_def.zmien_dolaczono_upust_glb (
+                p_dosp_id               => v_sord_id,
+                p_dolaczono_upust_glb   => 'T');
         END IF;
 
         /*UPDATE lg_sal_orders
            SET generate_warehouse_doc = 'T'
          WHERE id = v_sord_id;*/
 
-        IF   (     v_order_type = 'R'
-               AND check_reservations(v_sord_id))
+        IF    (v_order_type = 'R' AND check_reservations (v_sord_id))
            OR v_order_type = 'O'
         THEN
             lg_dosp_def.zatwierdz_dosp (p_dosp_id => v_sord_id);
         END IF;
 
-        v_rese_xml_clob := create_xml(get_order_reserv_query(v_sord_id), 'RESERVATION', 'RESERVATIONS');
-        v_rese_xml      := transform_xml(v_rese_xml_clob, 'RESERVATIONS');
+        v_rese_xml_clob :=
+            create_xml (get_order_reserv_query (v_sord_id),
+                        'RESERVATION',
+                        'RESERVATIONS');
+        v_rese_xml := transform_xml (v_rese_xml_clob, 'RESERVATIONS');
 
         UPDATE jg_input_log
-           SET xml_response = v_rese_xml.GetClobVal
+           SET xml_response = v_rese_xml.getclobval
          WHERE id = p_operation_id;
-        
+
         pa_wass_def.usun (p_nazwa => 'IMPORT_INFINITE');
 
         RETURN v_sord_id;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
     FUNCTION cancel_order (
-        p_operation_id                  IN      jg_output_log.id%TYPE,
-        p_object_type                   IN      jg_sql_repository.object_type%TYPE)
-        RETURN jg_input_log.object_id%TYPE IS
-------------------------------------------------------------------------------------------------------------------------
-        v_sql_query                     CLOB;
-        v_sord_id                       lg_sal_orders.id%TYPE;
-        v_sord_symbol                   lg_sal_orders.symbol%TYPE;
-        v_sord_type                     VARCHAR2 (1);
-        c_order                         SYS_REFCURSOR;
+        p_operation_id   IN jg_output_log.id%TYPE,
+        p_object_type    IN jg_sql_repository.object_type%TYPE)
+        RETURN jg_input_log.object_id%TYPE
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_sql_query     CLOB;
+        v_sord_id       lg_sal_orders.id%TYPE;
+        v_sord_symbol   lg_sal_orders.symbol%TYPE;
+        v_sord_type     VARCHAR2 (1);
+        c_order         SYS_REFCURSOR;
     BEGIN
-        v_sql_query  := get_query_from_sql_repository (p_object_type);
-        v_sql_query  := REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
-        
-         OPEN c_order FOR v_sql_query;
-        FETCH c_order
-         INTO v_sord_id,
-              v_sord_symbol,
-              v_sord_type;
+        v_sql_query := get_query_from_sql_repository (p_object_type);
+        v_sql_query :=
+            REPLACE (v_sql_query, ':p_operation_id', p_operation_id);
+
+        OPEN c_order FOR v_sql_query;
+
+        FETCH c_order INTO v_sord_id, v_sord_symbol, v_sord_type;
+
         CLOSE c_order;
-        
+
         IF v_sord_id IS NULL
         THEN
-            assert(false, 'Nie znaleziono zamówienia o symbolu '|| v_sord_symbol);
-        
+            assert (FALSE,
+                    'Nie znaleziono zamówienia o symbolu ' || v_sord_symbol);
         ELSIF v_sord_type != 'A'
         THEN
-            assert(false, 'Błędny typ zamówienia o symbolu '|| v_sord_symbol||'. Oczekiwano A, uzyskano '||v_sord_type);
+            assert (
+                FALSE,
+                   'Błędny typ zamówienia o symbolu '
+                || v_sord_symbol
+                || '. Oczekiwano A, uzyskano '
+                || v_sord_type);
         ELSE
-            Lg_Dosp_Def.Anuluj_Dosp(p_id => v_sord_id);
+            lg_dosp_def.anuluj_dosp (p_id => v_sord_id);
         END IF;
-        
+
         RETURN v_sord_id;
     END;
-    
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE send_error_response (
-        pr_operation                    IN      jg_input_log%ROWTYPE ) IS
-------------------------------------------------------------------------------------------------------------------------
-        v_xml_response                  CLOB := NULL;
-        v_oryginal_id                   VARCHAR2 (100);
-        v_xml_path                      VARCHAR2 (500);
-        v_sql_query                     VARCHAR2 (4000);
-        v_file_name                     VARCHAR2(500);
+
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_error_response (pr_operation IN jg_input_log%ROWTYPE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_xml_response   CLOB := NULL;
+        v_oryginal_id    VARCHAR2 (100);
+        v_xml_path       VARCHAR2 (500);
+        v_sql_query      VARCHAR2 (4000);
+        v_file_name      VARCHAR2 (500);
     BEGIN
         IF pr_operation.object_type = 'ORDER'
         THEN
-            v_xml_path    := '/Order/OrderHeader/OrderNumber';
-            v_file_name   := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/order_' || pr_operation.file_name;
-
+            v_xml_path := '/Order/OrderHeader/OrderNumber';
+            v_file_name :=
+                   jg_ftp_configuration.sf_ftp_in_folder
+                || '/IN/responses/orders/order_'
+                || pr_operation.file_name;
         ELSIF pr_operation.object_type = 'CANCEL_RESERVATION'
         THEN
-            v_xml_path    := '/Order/OrderHeader/OrderNumber';
-            v_file_name   := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/canceled_reservations/order_' || pr_operation.file_name;
-        
+            v_xml_path := '/Order/OrderHeader/OrderNumber';
+            v_file_name :=
+                   jg_ftp_configuration.sf_ftp_in_folder
+                || '/IN/responses/canceled_reservations/order_'
+                || pr_operation.file_name;
         ELSIF    pr_operation.object_type = 'NEW_CONTRACTORS'
               OR pr_operation.object_type = 'CUSTOMER_DATA'
         THEN
-            v_file_name := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/contractors/contractor_' || pr_operation.file_name;
+            v_file_name :=
+                   jg_ftp_configuration.sf_ftp_in_folder
+                || '/IN/responses/contractors/contractor_'
+                || pr_operation.file_name;
 
             IF pr_operation.object_type = 'NEW_CONTRACTORS'
             THEN
@@ -2375,16 +2520,19 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             ELSE
                 v_xml_path := '/CustomerData/BasicData/MobizID';
             END IF;
-
         ELSIF pr_operation.object_type = 'CASH_RECEIPTS'
         THEN
-            v_xml_path  := '/NewKPConfirmation/KPNumber';
-            v_file_name := jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/new_kp/new_kp_' || pr_operation.file_name;
+            v_xml_path := '/NewKPConfirmation/KPNumber';
+            v_file_name :=
+                   jg_ftp_configuration.sf_ftp_in_folder
+                || '/IN/responses/new_kp/new_kp_'
+                || pr_operation.file_name;
         END IF;
 
         BEGIN
-            v_oryginal_id := pa_xmltype.wartosc (px_xml    => xmltype (pr_operation.xml),
-                                                 p_sciezka => v_xml_path);
+            v_oryginal_id :=
+                pa_xmltype.wartosc (px_xml      => xmltype (pr_operation.xml),
+                                    p_sciezka   => v_xml_path);
         EXCEPTION
             WHEN OTHERS
             THEN
@@ -2392,23 +2540,27 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         END;
 
         v_sql_query :=
-                'SELECT ''' || v_oryginal_id || ''' order_number,
+               'SELECT '''
+            || v_oryginal_id
+            || ''' order_number,
                           status,
                           TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                           TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
                           FILE_NAME,
                           error ERROR_MESSAGE
                    FROM jg_input_log inlo
-                  WHERE id = ' || pr_operation.id;
+                  WHERE id = '
+            || pr_operation.id;
 
-        v_xml_response := create_xml (v_sql_query, pr_operation.object_type || '_RESPONSE');
+        v_xml_response :=
+            create_xml (v_sql_query, pr_operation.object_type || '_RESPONSE');
 
         IF v_xml_response IS NOT NULL
         THEN
             BEGIN
                 jg_output_sync.send_text_file_to_ftp (
-                        p_xml         => v_xml_response,
-                        p_file_name   => v_file_name);
+                    p_xml         => v_xml_response,
+                    p_file_name   => v_file_name);
             EXCEPTION
                 WHEN OTHERS
                 THEN
@@ -2424,31 +2576,36 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         END IF;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE send_response (
-        p_operation_id                  IN      jg_input_log.id%TYPE ) IS
-------------------------------------------------------------------------------------------------------------------------
-        r_operation                     jg_input_log%ROWTYPE;
-        v_xml                           XMLTYPE;
-        v_xml_clob                      CLOB;
-        v_xslt                          CLOB;
-        v_sql_query                     VARCHAR2 (4000);
-        v_oryginal_id                   VARCHAR2 (100);
-        v_xml_path                      VARCHAR2 (500);
-        v_xml_response                  CLOB;
-        v_reservation_response          CLOB;
-        v_order_type                    VARCHAR2 (1);
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE send_response (p_operation_id IN jg_input_log.id%TYPE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        r_operation              jg_input_log%ROWTYPE;
+        v_xml                    XMLTYPE;
+        v_xml_clob               CLOB;
+        v_xslt                   CLOB;
+        v_sql_query              VARCHAR2 (4000);
+        v_oryginal_id            VARCHAR2 (100);
+        v_xml_path               VARCHAR2 (500);
+        v_xml_response           CLOB;
+        v_reservation_response   CLOB;
+        v_order_type             VARCHAR2 (1);
     BEGIN
-        r_operation := inlo_rt(p_operation_id);
+        r_operation := inlo_rt (p_operation_id);
 
         IF r_operation.object_type = 'ORDER'
         THEN
             v_reservation_response := r_operation.xml_response;
-            v_order_type           := pa_xmltype.wartosc (px_xml    => xmltype (r_operation.xml),
-                                                          p_sciezka => '/Order/OrderHeader/OrderType');
+            v_order_type :=
+                pa_xmltype.wartosc (
+                    px_xml      => xmltype (r_operation.xml),
+                    p_sciezka   => '/Order/OrderHeader/OrderType');
+
             BEGIN
-                v_oryginal_id := pa_xmltype.wartosc (px_xml    => xmltype (r_operation.xml),
-                                                     p_sciezka => '/Order/OrderHeader/OrderNumber');
+                v_oryginal_id :=
+                    pa_xmltype.wartosc (
+                        px_xml      => xmltype (r_operation.xml),
+                        p_sciezka   => '/Order/OrderHeader/OrderNumber');
             EXCEPTION
                 WHEN OTHERS
                 THEN
@@ -2456,7 +2613,9 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             END;
 
             v_sql_query :=
-                   'SELECT ''' || v_oryginal_id || ''' order_number,
+                   'SELECT '''
+                || v_oryginal_id
+                || ''' order_number,
                            status,
                            TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                            TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
@@ -2466,32 +2625,41 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                               FROM lg_sal_orders
                              WHERE id = inlo.object_id) erp_order_symbol
                       FROM jg_input_log inlo
-                     WHERE id = ' || r_operation.id;
+                     WHERE id = '
+                || r_operation.id;
 
-            v_xml_clob := create_xml (v_sql_query, r_operation.object_type || '_RESPONSE');
+            v_xml_clob :=
+                create_xml (v_sql_query,
+                            r_operation.object_type || '_RESPONSE');
 
             IF v_xml_clob IS NOT NULL
             THEN
                 BEGIN
                     jg_output_sync.send_text_file_to_ftp (
                         p_xml         => v_xml_clob,
-                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/order_' || r_operation.file_name);
+                        p_file_name   =>    jg_ftp_configuration.sf_ftp_in_folder
+                                         || '/IN/responses/orders/order_'
+                                         || r_operation.file_name);
 
                     v_xml_response := v_xml_clob;
                 EXCEPTION
                     WHEN OTHERS
                     THEN
-                    NULL;
+                        NULL;
                 END;
             END IF;
 
             IF v_reservation_response IS NOT NULL
             THEN
                 jg_output_sync.send_text_file_to_ftp (
-                        p_xml         => v_reservation_response,
-                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/reservations_' || r_operation.file_name);
+                    p_xml         => v_reservation_response,
+                    p_file_name   =>    jg_ftp_configuration.sf_ftp_in_folder
+                                     || '/IN/responses/orders/reservations_'
+                                     || r_operation.file_name);
 
-                v_xml_response := NVL (CONCAT (v_xml_response, v_reservation_response), v_xml_response);
+                v_xml_response :=
+                    NVL (CONCAT (v_xml_response, v_reservation_response),
+                         v_xml_response);
             END IF;
 
             v_sql_query :=
@@ -2508,7 +2676,8 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                                           AND reze.zare_id(+) = zare.id
                                           AND sori.document_id = sord.id) reservations
                       FROM lg_sal_orders sord
-                     WHERE sord.id = ' || r_operation.object_id;
+                     WHERE sord.id = '
+                || r_operation.object_id;
 
             v_xslt :=
                 '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
@@ -2532,20 +2701,25 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                 v_xml := transform_xml (v_xml_clob, 'ORDER_RESPONSE', v_xslt);
                 jg_output_sync.send_text_file_to_ftp (
                     p_xml         => v_xml.getclobval (),
-                    p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/orders/orderExtended_' || r_operation.file_name);
+                    p_file_name   =>    jg_ftp_configuration.sf_ftp_in_folder
+                                     || '/IN/responses/orders/orderExtended_'
+                                     || r_operation.file_name);
 
-                v_xml_response := NVL (CONCAT (v_xml_response, v_xml.GetClobVal()), v_xml.GetClobVal());
+                v_xml_response :=
+                    NVL (CONCAT (v_xml_response, v_xml.getclobval ()),
+                         v_xml.getclobval ());
             END IF;
 
             UPDATE jg_input_log
                SET xml_response = v_xml_response
              WHERE id = r_operation.id;
-
         ELSIF r_operation.object_type = 'CANCEL_RESERVATION'
         THEN
             BEGIN
-                v_oryginal_id := pa_xmltype.wartosc (px_xml    => xmltype (r_operation.xml),
-                                                     p_sciezka => '/Order/OrderHeader/OrderNumber');
+                v_oryginal_id :=
+                    pa_xmltype.wartosc (
+                        px_xml      => xmltype (r_operation.xml),
+                        p_sciezka   => '/Order/OrderHeader/OrderNumber');
             EXCEPTION
                 WHEN OTHERS
                 THEN
@@ -2553,7 +2727,9 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             END;
 
             v_sql_query :=
-                   'SELECT ''' || v_oryginal_id || ''' order_number,
+                   'SELECT '''
+                || v_oryginal_id
+                || ''' order_number,
                            status,
                            TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                            TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
@@ -2563,29 +2739,33 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                               FROM lg_sal_orders
                              WHERE id = inlo.object_id) erp_order_symbol
                       FROM jg_input_log inlo
-                     WHERE id = ' || r_operation.id;
+                     WHERE id = '
+                || r_operation.id;
 
-            v_xml_clob := create_xml (v_sql_query, r_operation.object_type || '_RESPONSE');
+            v_xml_clob :=
+                create_xml (v_sql_query,
+                            r_operation.object_type || '_RESPONSE');
 
             IF v_xml_clob IS NOT NULL
             THEN
                 BEGIN
                     jg_output_sync.send_text_file_to_ftp (
                         p_xml         => v_xml_clob,
-                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/canceled_reservations/order_' || r_operation.file_name);
+                        p_file_name   =>    jg_ftp_configuration.sf_ftp_in_folder
+                                         || '/IN/responses/canceled_reservations/order_'
+                                         || r_operation.file_name);
 
                     v_xml_response := v_xml_clob;
                 EXCEPTION
                     WHEN OTHERS
                     THEN
-                    NULL;
+                        NULL;
                 END;
             END IF;
-            
+
             UPDATE jg_input_log
                SET xml_response = v_xml_response
              WHERE id = r_operation.id;
-             
         ELSIF    r_operation.object_type = 'NEW_CONTRACTORS'
               OR r_operation.object_type = 'CUSTOMER_DATA'
         THEN
@@ -2597,8 +2777,9 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             END IF;
 
             BEGIN
-                v_oryginal_id :=  pa_xmltype.wartosc (px_xml    => xmltype (r_operation.xml),
-                                                      p_sciezka => v_xml_path);
+                v_oryginal_id :=
+                    pa_xmltype.wartosc (px_xml      => xmltype (r_operation.xml),
+                                        p_sciezka   => v_xml_path);
             EXCEPTION
                 WHEN OTHERS
                 THEN
@@ -2606,7 +2787,9 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             END;
 
             v_sql_query :=
-                   'SELECT ''' || v_oryginal_id || ''' MOBIZID,
+                   'SELECT '''
+                || v_oryginal_id
+                || ''' MOBIZID,
                            status,
                            TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                            TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
@@ -2616,16 +2799,21 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                               FROM ap_kontrahenci
                              WHERE id = inlo.object_id) erp_contractor_symbol
                       FROM jg_input_log inlo
-                     WHERE id = ' || r_operation.id;
+                     WHERE id = '
+                || r_operation.id;
 
-            v_xml_clob := create_xml (v_sql_query, r_operation.object_type || '_RESPONSE');
+            v_xml_clob :=
+                create_xml (v_sql_query,
+                            r_operation.object_type || '_RESPONSE');
 
             IF v_xml_clob IS NOT NULL
             THEN
                 BEGIN
                     jg_output_sync.send_text_file_to_ftp (
                         p_xml         => v_xml_clob,
-                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/contractors/contractor_' || r_operation.file_name);
+                        p_file_name   =>    jg_ftp_configuration.sf_ftp_in_folder
+                                         || '/IN/responses/contractors/contractor_'
+                                         || r_operation.file_name);
 
                     UPDATE jg_input_log
                        SET xml_response = v_xml_clob
@@ -2636,37 +2824,45 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                         NULL;
                 END;
             END IF;
-
         ELSIF r_operation.object_type = 'CASH_RECEIPTS'
         THEN
             v_xml_path := '/NewKPConfirmation/KPNumber';
 
             BEGIN
-                v_oryginal_id := pa_xmltype.wartosc (px_xml    => xmltype (r_operation.xml),
-                                                     p_sciezka => v_xml_path);
+                v_oryginal_id :=
+                    pa_xmltype.wartosc (px_xml      => xmltype (r_operation.xml),
+                                        p_sciezka   => v_xml_path);
             EXCEPTION
                 WHEN OTHERS
                 THEN
                     v_oryginal_id := 'TO_CHAR(NULL)';
             END;
 
-            v_sql_query := 'SELECT '''  || v_oryginal_id || ''' KPNumber,
+            v_sql_query :=
+                   'SELECT '''
+                || v_oryginal_id
+                || ''' KPNumber,
                                    STATUS,
                                    TO_CHAR(processed_date,''YYYY-MM-DD HH24:MI:SS'') processed_date,
                                    TO_CHAR(log_date,''YYYY-MM-DD HH24:MI:SS'') log_date,
                                    FILE_NAME,
                                    ERROR ERROR_MESSAGE
                               FROM jg_input_log inlo
-                             WHERE id = ' || r_operation.id;
+                             WHERE id = '
+                || r_operation.id;
 
-            v_xml_clob := create_xml (v_sql_query, r_operation.object_type || '_RESPONSE');
+            v_xml_clob :=
+                create_xml (v_sql_query,
+                            r_operation.object_type || '_RESPONSE');
 
             IF v_xml_clob IS NOT NULL
             THEN
                 BEGIN
                     jg_output_sync.send_text_file_to_ftp (
                         p_xml         => v_xml_clob,
-                        p_file_name   => jg_ftp_configuration.sf_ftp_in_folder || '/IN/responses/new_kp/new_kp_' || r_operation.file_name);
+                        p_file_name   =>    jg_ftp_configuration.sf_ftp_in_folder
+                                         || '/IN/responses/new_kp/new_kp_'
+                                         || r_operation.file_name);
 
                     UPDATE jg_input_log
                        SET xml_response = v_xml_clob
@@ -2680,65 +2876,61 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
         END IF;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE process (
-        pr_operation                    IN      jg_input_log%ROWTYPE ) IS
-------------------------------------------------------------------------------------------------------------------------
-        v_object_id                     jg_input_log.object_id%TYPE;
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE process (pr_operation IN jg_input_log%ROWTYPE)
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_object_id   jg_input_log.object_id%TYPE;
     BEGIN
         CASE pr_operation.object_type
-
             WHEN 'NEW_CONTRACTORS'
             THEN
                 v_object_id :=
                     import_customer (
                         p_xml           => pr_operation.xml,
                         p_object_type   => pr_operation.object_type);
-
             WHEN 'CUSTOMER_DATA'
             THEN
                 v_object_id :=
                     import_customer (
                         p_xml           => pr_operation.xml,
                         p_object_type   => pr_operation.object_type);
-
             WHEN 'ORDER'
             THEN
                 v_object_id :=
                     import_sale_order (
                         p_operation_id   => pr_operation.id,
                         p_object_type    => pr_operation.object_type);
-
             WHEN 'CANCEL_RESERVATION'
             THEN
                 v_object_id :=
                     cancel_order (
                         p_operation_id   => pr_operation.id,
                         p_object_type    => pr_operation.object_type);
-                        
             WHEN 'CASH_RECEIPTS'
             THEN
                 v_object_id :=
-                    import_cash_receipts (p_operation_id   => pr_operation.id);
+                    import_cash_receipts (p_operation_id => pr_operation.id);
         END CASE;
 
         save_result (p_inlo_id     => pr_operation.id,
                      p_status      => 'PROCESSED',
                      p_object_id   => v_object_id);
 
-        send_response(p_operation_id => pr_operation.id);
+        send_response (p_operation_id => pr_operation.id);
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE Get_From_Ftp IS
-------------------------------------------------------------------------------------------------------------------------
-        v_connection                    UTL_TCP.connection;
-        v_file_list                     jg_ftp.t_string_table;
-        v_file                          CLOB;
-        v_object_type                   jg_input_log.object_type%TYPE;
-        v_on_time                       jg_input_log.on_time%TYPE;
-        v_error                         jg_input_log.error%TYPE;
-        v_dir                           VARCHAR2(100);
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE get_from_ftp
+    IS
+        ------------------------------------------------------------------------------------------------------------------------
+        v_connection    UTL_TCP.connection;
+        v_file_list     jg_ftp.t_string_table;
+        v_file          CLOB;
+        v_object_type   jg_input_log.object_type%TYPE;
+        v_on_time       jg_input_log.on_time%TYPE;
+        v_error         jg_input_log.error%TYPE;
+        v_dir           VARCHAR2 (100);
     BEGIN
         BEGIN
             v_connection :=
@@ -2754,7 +2946,10 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                            GROUP BY sqre.file_location, sqre.object_type)
             LOOP
                 v_file_list := NULL;
-                v_dir := jg_ftp_configuration.sf_ftp_in_folder || '/' || r_sqre.file_location;
+                v_dir :=
+                       jg_ftp_configuration.sf_ftp_in_folder
+                    || '/'
+                    || r_sqre.file_location;
 
                 jg_ftp.nlst (p_conn   => v_connection,
                              p_dir    => v_dir,
@@ -2770,7 +2965,8 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                             v_object_type := r_sqre.object_type;
 
                             IF     v_object_type = 'NEW_CONTRACTORS'
-                               AND INSTR (UPPER (v_file_list (v_i)), 'CUSTOMER_DATA') > 0
+                               AND INSTR (UPPER (v_file_list (v_i)),
+                                          'CUSTOMER_DATA') > 0
                             THEN
                                 v_object_type := 'CUSTOMER_DATA';
                             END IF;
@@ -2779,19 +2975,30 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                             THEN
                                 v_file :=
                                     jg_ftp.get_remote_ascii_data (
-                                        p_conn => v_connection,
-                                        p_file => v_dir || '/' || v_file_list (v_i));
+                                        p_conn   => v_connection,
+                                        p_file   =>    v_dir
+                                                    || '/'
+                                                    || v_file_list (v_i));
 
-                                INSERT INTO jg_input_log (id, file_name, object_type, xml, on_time)
+                                INSERT INTO jg_input_log (id,
+                                                          file_name,
+                                                          object_type,
+                                                          xml,
+                                                          on_time)
                                      VALUES (jg_inlo_seq.NEXTVAL,
                                              v_file_list (v_i),
                                              v_object_type,
                                              v_file,
                                              'T');
 
-                                jg_ftp.rename (p_conn   => v_connection,
-                                               p_from   => v_dir || '/' || v_file_list (v_i),
-                                               p_to     => v_dir || '/archive/' || v_file_list (v_i));
+                                jg_ftp.rename (
+                                    p_conn   => v_connection,
+                                    p_from   =>    v_dir
+                                                || '/'
+                                                || v_file_list (v_i),
+                                    p_to     =>    v_dir
+                                                || '/archive/'
+                                                || v_file_list (v_i));
                             END IF;
                         EXCEPTION
                             WHEN OTHERS
@@ -2827,15 +3034,16 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             WHEN OTHERS
             THEN
                 jg_ftp.LOGOUT (v_connection);
-                assert (FALSE, SQLERRM || '  ' || DBMS_UTILITY.format_error_backtrace);
+                assert (
+                    FALSE,
+                    SQLERRM || '  ' || DBMS_UTILITY.format_error_backtrace);
         END;
 
         COMMIT;
 
         FOR r_operation IN (SELECT *
                               FROM jg_input_log
-                             WHERE     status = 'READY'
-                                   AND on_time = 'T')
+                             WHERE status = 'READY' AND on_time = 'T')
         LOOP
             SAVEPOINT operation;
 
@@ -2851,16 +3059,19 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                         p_inlo_id     => r_operation.id,
                         p_status      => 'ERROR',
                         p_object_id   => NULL,
-                        p_error       => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                        p_error       =>    SQLERRM
+                                         || CHR (13)
+                                         || DBMS_UTILITY.format_error_backtrace);
 
-                    send_error_response(r_operation);
+                    send_error_response (r_operation);
             END;
         END LOOP;
     END;
 
-------------------------------------------------------------------------------------------------------------------------
-    PROCEDURE Process_All IS
-------------------------------------------------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------------------------------------------
+    PROCEDURE process_all
+    IS
+    ------------------------------------------------------------------------------------------------------------------------
     BEGIN
         FOR r_operation IN (SELECT *
                               FROM jg_input_log
@@ -2879,13 +3090,14 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
                         p_inlo_id     => r_operation.id,
                         p_status      => 'ERROR',
                         p_object_id   => NULL,
-                        p_error       => SQLERRM || CHR (13) || DBMS_UTILITY.format_error_backtrace);
+                        p_error       =>    SQLERRM
+                                         || CHR (13)
+                                         || DBMS_UTILITY.format_error_backtrace);
 
-                    send_error_response(r_operation);
+                    send_error_response (r_operation);
             END;
         END LOOP;
     END;
-
 ------------------------------------------------------------------------------------------------------------------------
 END;
 /
@@ -2923,7 +3135,7 @@ IS
     BEGIN
         OPEN c_operation (p_object_id, p_object_type);
 
-        FETCH c_operation   INTO r_obop;
+        FETCH c_operation INTO r_obop;
 
         CLOSE c_operation;
 
@@ -2950,7 +3162,7 @@ IS
     BEGIN
         OPEN c_operation (p_object_id, p_object_type);
 
-        FETCH c_operation   INTO v_obop_id;
+        FETCH c_operation INTO v_obop_id;
 
         IF c_operation%FOUND
         THEN
@@ -2985,16 +3197,16 @@ IS
                                                     object_id,
                                                     operation_type,
                                                     attachment)
-                VALUES (jg_obop_seq.NEXTVAL,
-                        p_object_type,
-                        p_object_id,
-                        p_operation_type,
-                        p_attachment);
+                     VALUES (jg_obop_seq.NEXTVAL,
+                             p_object_type,
+                             p_object_id,
+                             p_operation_type,
+                             p_attachment);
             ELSE
                 IF p_operation_type = 'DELETE'
                 THEN
                     DELETE FROM jg_observed_operations
-                     WHERE id = r_obop.id;
+                          WHERE id = r_obop.id;
                 END IF;
             END IF;
         END IF;
@@ -3015,8 +3227,8 @@ AS
     v_sql       lg_kpl_skladniki_kompletu.sql_stmt%TYPE;
 BEGIN
     FOR r_skkp IN (SELECT sql_stmt
-                   FROM lg_kpl_skladniki_kompletu skkp
-                   WHERE skkp.id = p_skkp_id)
+                     FROM lg_kpl_skladniki_kompletu skkp
+                    WHERE skkp.id = p_skkp_id)
     LOOP
         v_sql := r_skkp.sql_stmt;
     END LOOP;
@@ -3026,7 +3238,7 @@ BEGIN
         OPEN c_inma FOR v_sql;
 
         LOOP
-            FETCH c_inma   INTO v_inma_id;
+            FETCH c_inma INTO v_inma_id;
 
             EXIT WHEN c_inma%NOTFOUND;
             PIPE ROW (v_inma_id);
@@ -3068,8 +3280,8 @@ BEGIN
     END IF;
 
     FOR r_adre IN (SELECT konr_id
-                   FROM pa_adr_adresy_kontrahentow_vw
-                   WHERE adge_id = :new.id)
+                     FROM pa_adr_adresy_kontrahentow_vw
+                    WHERE adge_id = :new.id)
     LOOP
         jg_obop_def.add_operation (p_object_id        => r_adre.konr_id,
                                    p_object_type      => 'CONTRACTORS',
@@ -3293,13 +3505,13 @@ DECLARE
 BEGIN
     FOR r_osol
         IN (SELECT osol.id
-            FROM lg_osoby_log osol,
-                 (SELECT *
-                    FROM lg_grupy_kontrahentow
-                  START WITH id = 63
-                  CONNECT BY PRIOR id = grkn_id) grko
-            WHERE     osol.atrybut_t01 = grko.nazwa
-                  AND grko.id IN (:new.grkn_id, :old.grkn_id))
+              FROM lg_osoby_log osol,
+                   (    SELECT *
+                          FROM lg_grupy_kontrahentow
+                    START WITH id = 63
+                    CONNECT BY PRIOR id = grkn_id) grko
+             WHERE     osol.atrybut_t01 = grko.nazwa
+                   AND grko.id IN (:new.grkn_id, :old.grkn_id))
     LOOP
         jg_obop_def.add_operation (p_object_id        => r_osol.id,
                                    p_object_type      => 'SALES_REPRESENTATIVES',
@@ -3309,16 +3521,16 @@ BEGIN
 
     FOR r_osol
         IN (SELECT osol.id
-            FROM lg_osoby_log osol,
-                 (SELECT *
-                    FROM lg_grupy_kontrahentow
-                  START WITH id = 63
-                  CONNECT BY PRIOR id = grkn_id) grko,
-                 lg_kontrahenci_grup kngr
-            WHERE     osol.atrybut_t01 = grko.nazwa
-                  AND grko.id = kngr.grkn_id
-                  AND osol.aktualna = 'T'
-                  AND kngr.konr_id IN (:new.konr_id, :old.konr_id))
+              FROM lg_osoby_log osol,
+                   (    SELECT *
+                          FROM lg_grupy_kontrahentow
+                    START WITH id = 63
+                    CONNECT BY PRIOR id = grkn_id) grko,
+                   lg_kontrahenci_grup kngr
+             WHERE     osol.atrybut_t01 = grko.nazwa
+                   AND grko.id = kngr.grkn_id
+                   AND osol.aktualna = 'T'
+                   AND kngr.konr_id IN (:new.konr_id, :old.konr_id))
     LOOP
         jg_obop_def.add_operation (p_object_id        => r_osol.id,
                                    p_object_type      => 'SALES_REPRESENTATIVES',
@@ -3499,8 +3711,9 @@ BEGIN
     THEN
         RETURN;
     END IF;
-    
-    IF lg_rzm_zare_agd.zrre_typ (p_id => NVL (:new.zare_id, :old.zare_id)) = 'ZASI'
+
+    IF lg_rzm_zare_agd.zrre_typ (p_id => NVL (:new.zare_id, :old.zare_id)) =
+           'ZASI'
     THEN
         IF INSERTING OR UPDATING
         THEN
@@ -3693,8 +3906,8 @@ BEGIN
     END IF;
 
     FOR r_adre IN (SELECT konr_id
-                   FROM pa_adr_adresy_kontrahentow_vw
-                   WHERE uzad_id = :new.id)
+                     FROM pa_adr_adresy_kontrahentow_vw
+                    WHERE uzad_id = :new.id)
     LOOP
         jg_obop_def.add_operation (p_object_id        => r_adre.konr_id,
                                    p_object_type      => 'CONTRACTORS',
@@ -3807,10 +4020,17 @@ DECLARE
     v_order_clob   CLOB;
     v_xslt         CLOB;
 BEGIN
-    INSERT INTO jg_sql_repository (ID, object_type, sql_query, xslt, file_location, up_to_date, direction)
-         VALUES (jg_sqre_seq.NEXTVAL,
-                 'CANCEL_RESERVATION',
-                 'SELECT sord.id,
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,
+                                   sql_query,
+                                   xslt,
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'CANCEL_RESERVATION',
+                        'SELECT sord.id,
                          header.order_number,
                          header.order_type
                     FROM jg_input_log LOG,
@@ -3823,21 +4043,21 @@ BEGIN
                    WHERE (    sord.doc_symbol_rcv(+) = header.order_number
                           AND sord.payer_symbol(+) = header.seller_buyer_id)
                           AND LOG.id = :p_operation_id',
-                 NULL,
-                 'OUT/canceled_reservations',
-                 'T',
-                 'IN');
-            
+                        NULL,
+                        'OUT/canceled_reservations',
+                        'T',
+                        'IN');
+
     INSERT INTO jg_sql_repository (id,
                                    object_type,
                                    file_location,
                                    up_to_date,
                                    direction)
-    VALUES (jg_sqre_seq.NEXTVAL,
-            'CASH_RECEIPTS',
-            'OUT/new_kp',
-            'T',
-            'IN');
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'CASH_RECEIPTS',
+                 'OUT/new_kp',
+                 'T',
+                 'IN');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -3846,10 +4066,10 @@ BEGIN
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'INVOICES_PAYMENTS',
-                   '
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'INVOICES_PAYMENTS',
+                        '
 SELECT rndo.symbol_dokumentu invoice_number,
          rndo.data_dokumentu invoice_date,
          rndo.termin_platnosci due_date,
@@ -3885,7 +4105,7 @@ GROUP BY rndo.symbol_dokumentu,
          rndo.poz_do_zaplaty_dok_z_kor_wwb,
          rndo.rndo_id,
           rndo.data_dokumentu',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -3901,9 +4121,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <PAYMENT_DETAIL><xsl:apply-templates/></PAYMENT_DETAIL>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/invoices_payments',
-                   'T',
-                   'OUT');
+                        'IN/invoices_payments',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -3912,10 +4132,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'COMMODITIES',
-                   'SELECT inma.indeks item_index,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'COMMODITIES',
+                        'SELECT inma.indeks item_index,
        inma.nazwa name,
        ec ec,
        inma.jdmr_nazwa base_unit_of_measure_code,
@@ -3999,7 +4219,7 @@ GROUP BY rndo.symbol_dokumentu,
            groups
   FROM ap_indeksy_materialowe inma
  WHERE inma.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -4024,9 +4244,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <GROUP><xsl:apply-templates/></GROUP>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/commodities',
-                   'T',
-                   'OUT');
+                        'IN/commodities',
+                        'T',
+                        'OUT');
 
 
     INSERT INTO jg_sql_repository (id,
@@ -4036,10 +4256,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'CONTRACTORS',
-                   'SELECT konr.symbol customer_number,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'CONTRACTORS',
+                        'SELECT konr.symbol customer_number,
                          konr_payer.symbol payer_number,
                          konr.nazwa name,
                          konr.skrot short_name,
@@ -4090,7 +4310,7 @@ GROUP BY rndo.symbol_dokumentu,
                     FROM ap_kontrahenci konr, ap_kontrahenci konr_payer
                    WHERE     konr_payer.id(+) = konr.platnik_id
                          AND konr.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                     <xsl:output method="xml" version="1.0" indent="yes" omit-xml-declaration="no" />
                     <xsl:strip-space elements="*"/>
                     <xsl:template match="node()|@*">
@@ -4109,9 +4329,9 @@ GROUP BY rndo.symbol_dokumentu,
                        <DELIVERY_ADDRESS><xsl:apply-templates/></DELIVERY_ADDRESS>
                     </xsl:template>
                  </xsl:stylesheet>',
-                   'IN/contractors',
-                   'T',
-                   'OUT');
+                        'IN/contractors',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -4120,10 +4340,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'INVOICES',
-                   'SELECT header.symbol invoice_symbol,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'INVOICES',
+                        'SELECT header.symbol invoice_symbol,
        (SELECT symbol
           FROM lg_sal_orders sord
          WHERE sord.id = header.source_order_id)
@@ -4174,7 +4394,7 @@ GROUP BY rndo.symbol_dokumentu,
  WHERE     header.approved = ''T''
        AND doc_type IN (''FS'', ''KS'')
        AND header.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -4190,9 +4410,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <LINE><xsl:apply-templates/></LINE>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/invoices',
-                   'T',
-                   'OUT');
+                        'IN/invoices',
+                        'T',
+                        'OUT');
 
     v_order_clob :=
         'SELECT header.*,
@@ -4692,13 +4912,13 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-    VALUES (jg_sqre_seq.NEXTVAL,
-            'ORDER',
-            v_order_clob,
-            v_xslt,
-            'OUT/orders',
-            'T',
-            'IN');
+         VALUES (jg_sqre_seq.NEXTVAL,
+                 'ORDER',
+                 v_order_clob,
+                 v_xslt,
+                 'OUT/orders',
+                 'T',
+                 'IN');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -4707,10 +4927,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'RESERVATIONS',
-                   'SELECT zare.dest_symbol order_id,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'RESERVATIONS',
+                        'SELECT zare.dest_symbol order_id,
                            sord.doc_symbol_rcv AS sfa_salo_id,
                            zare.data_realizacji realization_date,
                            inma.indeks commoditiy_id,
@@ -4727,7 +4947,7 @@ GROUP BY rndo.symbol_dokumentu,
                            AND sord.id       = sori.document_id
                            AND zare.zrre_typ = ''ZASI''
                            AND reze.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
                         <xsl:copy>
@@ -4742,9 +4962,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <RESERVATION><xsl:apply-templates/></RESERVATION>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/reservations',
-                   'T',
-                   'OUT');
+                        'IN/reservations',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -4753,10 +4973,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'SETS_COMPONENTS',
-                   'SELECT inma_kpl.indeks set_id,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'SETS_COMPONENTS',
+                        'SELECT inma_kpl.indeks set_id,
        inma_kpl.nazwa set_name,
        jg_output_sync.format_number (
            lg_stm_sgpu_sql.stan_goracy (inma_kpl.id,
@@ -4798,7 +5018,7 @@ GROUP BY rndo.symbol_dokumentu,
            components
   FROM ap_indeksy_materialowe inma_kpl
  WHERE inma_kpl.id IN ( :p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -4817,9 +5037,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <DYNAMIC_COMPONENT><xsl:apply-templates/></DYNAMIC_COMPONENT>
                      </xsl:template>                     
                   </xsl:stylesheet>',
-                   'IN/components',
-                   'T',
-                   'OUT');
+                        'IN/components',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -4828,10 +5048,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'SALES_REPRESENTATIVES',
-                   'SELECT okgi.id,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'SALES_REPRESENTATIVES',
+                        'SELECT okgi.id,
        osby.imie || '' '' || osby.nazwisko AS name,
        osol.atrybut_t02 AS numer_kasy,
        osol.kod AS id_erp,
@@ -4867,7 +5087,7 @@ GROUP BY rndo.symbol_dokumentu,
  WHERE     okgi.symbol = osol.atrybut_t01
        AND osol.id IN (:p_id)
        AND osol.osby_id = osby.id',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -4883,9 +5103,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <CONTRACTOR><xsl:apply-templates/></CONTRACTOR>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/sales_representatives',
-                   'T',
-                   'OUT');
+                        'IN/sales_representatives',
+                        'T',
+                        'OUT');
 
     v_xslt :=
         '<?xml version="1.0" encoding="UTF-8"?>
@@ -4983,9 +5203,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-    VALUES (jg_sqre_seq.NEXTVAL,
-            'NEW_CONTRACTORS',
-            'SELECT osol.kod        id,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'NEW_CONTRACTORS',
+                        'SELECT osol.kod        id,
                          osby.code       name,
                          osol.aktualna   active,
                          osol.first_name username,
@@ -5007,10 +5228,10 @@ GROUP BY rndo.symbol_dokumentu,
                     WHERE     osol.atrybut_t01 IS NOT NULL
                           AND osol.osby_id = osby.id
                           AND osol.id IN (:p_id)',
-            v_xslt,
-            'OUT/new_customer',
-            'T',
-            'IN');
+                        v_xslt,
+                        'OUT/new_customer',
+                        'T',
+                        'IN');
 
     v_xslt :=
         '<?xml version="1.0" encoding="UTF-8"?>
@@ -5109,9 +5330,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-    VALUES (jg_sqre_seq.NEXTVAL,
-            'CUSTOMER_DATA',
-            'SELECT osol.kod        id,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'CUSTOMER_DATA',
+                        'SELECT osol.kod        id,
                          osby.code       name,
                          osol.aktualna   active,
                          osol.first_name username,
@@ -5133,10 +5355,10 @@ GROUP BY rndo.symbol_dokumentu,
                     WHERE     osol.atrybut_t01 IS NOT NULL
                           AND osol.osby_id = osby.id
                           AND osol.id IN (:p_id)',
-            v_xslt,
-            'OUT/new_customer',
-            'T',
-            'IN');
+                        v_xslt,
+                        'OUT/new_customer',
+                        'T',
+                        'IN');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5145,15 +5367,15 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'DELIVERY_METHODS',
-                   'SELECT kod delivery_method_code,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'DELIVERY_METHODS',
+                        'SELECT kod delivery_method_code,
                          opis description,
                          aktualna up_to_date
                     FROM ap_sposoby_dostaw spdo
                    WHERE spdo.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                   <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                   <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5166,9 +5388,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <DELIVERY_METHOD><xsl:apply-templates /></DELIVERY_METHOD>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/delivery_methods',
-                   'T',
-                   'OUT');
+                        'IN/delivery_methods',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5177,10 +5399,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'PAYMENTS_METHODS',
-                   'SELECT foza.kod payment_method_code,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'PAYMENTS_METHODS',
+                        'SELECT foza.kod payment_method_code,
                          foza.opis description,
                          odroczenie_platnosci deferment_of_payment,
                          (SELECT rv_meaning
@@ -5190,7 +5412,7 @@ GROUP BY rndo.symbol_dokumentu,
                           aktualna up_to_date
                     FROM ap_formy_zaplaty foza
                    WHERE foza.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5203,9 +5425,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <PAYMENT_METHOD><xsl:apply-templates /></PAYMENT_METHOD>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/payments_methods',
-                   'T',
-                   'OUT');
+                        'IN/payments_methods',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5214,16 +5436,16 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'ORDERS_PATTERNS',
-                   'SELECT wzrc.pattern pattern_code,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'ORDERS_PATTERNS',
+                        'SELECT wzrc.pattern pattern_code,
                          wzrc.name pattern_name,
                          wzrc.up_to_date
                     FROM lg_documents_templates wzrc
                    WHERE     document_type = ''ZS''
                          AND wzrc.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5236,9 +5458,9 @@ GROUP BY rndo.symbol_dokumentu,
                         <ORDER_PATTERN><xsl:apply-templates /></ORDER_PATTERN>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/orders_patterns',
-                   'T',
-                   'OUT');
+                        'IN/orders_patterns',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5247,10 +5469,10 @@ GROUP BY rndo.symbol_dokumentu,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'DISCOUNTS',
-                   'WITH upta
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'DISCOUNTS',
+                        'WITH upta
      AS (SELECT upta.symbol,
                 wakw.id AS wakw_id,
                 upta.id AS upta_id,
@@ -5292,7 +5514,7 @@ SELECT upta.symbol discount_number,
             OR upko.upust_procentowy IS NOT NULL)
        AND SYSDATE BETWEEN prup.data_od AND NVL (data_do, SYSDATE)
        AND prup.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5305,9 +5527,9 @@ SELECT upta.symbol discount_number,
                         <DISCOUNT><xsl:apply-templates/></DISCOUNT>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/discounts',
-                   'T',
-                   'OUT');
+                        'IN/discounts',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5316,10 +5538,10 @@ SELECT upta.symbol discount_number,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'WAREHOUSES',
-                   ' SELECT maga.kod id,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'WAREHOUSES',
+                        ' SELECT maga.kod id,
          maga.nazwa name,
          CURSOR (
              SELECT inma1.indeks commodity_id,
@@ -5374,7 +5596,7 @@ SELECT upta.symbol discount_number,
                                      FROM ap_stany_magazynowe stma
                                     WHERE stma.id IN ( :p_id))
 GROUP BY maga.kod, maga.nazwa',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                     <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                     <xsl:strip-space elements="*"/>
                     <xsl:template match="node()|@*">
@@ -5390,9 +5612,9 @@ GROUP BY maga.kod, maga.nazwa',
                        <STOCK><xsl:apply-templates/></STOCK>
                     </xsl:template>
                  </xsl:stylesheet>',
-                   'IN/warehouses',
-                   'T',
-                   'OUT');
+                        'IN/warehouses',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5401,10 +5623,10 @@ GROUP BY maga.kod, maga.nazwa',
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'CONTRACTS',
-                   'SELECT umsp.symbol id,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'CONTRACTS',
+                        'SELECT umsp.symbol id,
        konr.symbol contractor_id,
        umsp1.date_from,
        umsp.data_do date_to,
@@ -5460,7 +5682,7 @@ GROUP BY maga.kod, maga.nazwa',
           AND umsp.zamknieta = ''N''
           ) umsp1
  WHERE konr.id = umsp.konr_id_pl AND wzrc.id = umsp.wzrc_id AND umsp.id = umsp1.id  AND umsp.id IN ( :p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:template match="@*|node()">
                         <xsl:copy>
@@ -5478,9 +5700,9 @@ GROUP BY maga.kod, maga.nazwa',
                         <PERIOD><xsl:apply-templates/></PERIOD>            
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/contracts',
-                   'T',
-                   'OUT');
+                        'IN/contracts',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5489,10 +5711,10 @@ GROUP BY maga.kod, maga.nazwa',
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'SUPPORT_FUNDS',
-                   'SELECT fwk.konr_symbol AS client_symbol,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'SUPPORT_FUNDS',
+                        'SELECT fwk.konr_symbol AS client_symbol,
        SUM (fwk.fwk_m_pozostalo) AS marketing_support_fund,
        SUM (fwk.fwk_t_pozostalo) AS real_support_fund,
        SUM (fwk.fwk_m_pozostalo) + SUM (fwk.fwk_t_pozostalo)
@@ -5504,7 +5726,7 @@ GROUP BY maga.kod, maga.nazwa',
                                  FROM jbs_mp_przeglad_fwk
                                 WHERE id IN (:p_id))
 GROUP BY fwk.konr_symbol',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5517,9 +5739,9 @@ GROUP BY fwk.konr_symbol',
                         <SUPPORT_FUND><xsl:apply-templates/></SUPPORT_FUND>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/support_funds',
-                   'T',
-                   'OUT');
+                        'IN/support_funds',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5528,10 +5750,10 @@ GROUP BY fwk.konr_symbol',
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'LOYALITY_POINTS',
-                   'SELECT puko.CLIENT_SYMBOL,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'LOYALITY_POINTS',
+                        'SELECT puko.CLIENT_SYMBOL,
                          puko.POINTS_TYPE,
                          puko.POINTS_VALUE,
                          puko.SUM_REAL_POINTS_VALUE,
@@ -5579,7 +5801,7 @@ GROUP BY fwk.konr_symbol',
                                 ap_kontrahenci konr
                           WHERE     konr.id = puko.konr_id
                                 AND puko.id IN (:p_id)) puko',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5595,9 +5817,9 @@ GROUP BY fwk.konr_symbol',
                         <POINTS><xsl:apply-templates/></POINTS>            
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/loyality_points',
-                   'T',
-                   'OUT');
+                        'IN/loyality_points',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5606,10 +5828,10 @@ GROUP BY fwk.konr_symbol',
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'TRADE_CONTRACTS_INDIVIDUAL',
-                   'SELECT konr.symbol contractors_id, 
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'TRADE_CONTRACTS_INDIVIDUAL',
+                        'SELECT konr.symbol contractors_id, 
         konr.nr_umowy_ind AS contract_number,
        DECODE (individual_contract,
                ''T'', konr.data_umowy_ind,
@@ -5650,7 +5872,7 @@ GROUP BY fwk.konr_symbol',
           FROM ap_kontrahenci konr) konr,
        lg_przyp_upustow prup
  WHERE prup.grod_id(+) = konr.grod_id AND konr.id IN ( :p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5663,9 +5885,9 @@ GROUP BY fwk.konr_symbol',
                         <TRADE_CONTRACTS><xsl:apply-templates/></TRADE_CONTRACTS>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/trade_contracts',
-                   'T',
-                   'OUT');
+                        'IN/trade_contracts',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5674,10 +5896,10 @@ GROUP BY fwk.konr_symbol',
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'TRADE_CONTRACTS',
-                   'WITH ind_co
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'TRADE_CONTRACTS',
+                        'WITH ind_co
      AS (SELECT konr.id AS konr_id,
                 DECODE (individual_contract,
                         ''T'', a_mp_dekoduj_pkt (konr.atrybut_t07, 0),
@@ -5772,7 +5994,7 @@ SELECT konr.symbol contractors_id,
  WHERE     grod.id(+) = konr.grod_id
        AND konr.platnik = ''T''
        AND konr.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5785,9 +6007,9 @@ SELECT konr.symbol contractors_id,
                         <TRADE_CONTRACTS><xsl:apply-templates/></TRADE_CONTRACTS>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/trade_contracts',
-                   'T',
-                   'OUT');
+                        'IN/trade_contracts',
+                        'T',
+                        'OUT');
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
@@ -5796,10 +6018,10 @@ SELECT konr.symbol contractors_id,
                                    file_location,
                                    up_to_date,
                                    direction)
-        VALUES (
-                   jg_sqre_seq.NEXTVAL,
-                   'DELIVERIES',
-                   'SELECT doob.symbol AS document_symbol,
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'DELIVERIES',
+                        'SELECT doob.symbol AS document_symbol,
        doob.konr_symbol AS contractor_symbol,
        doob.data_realizacji AS realization_date,
        doob.numer AS document_number,
@@ -5842,7 +6064,7 @@ SELECT konr.symbol contractors_id,
  WHERE     doob.wzty_kod = ''WZ''
        AND doob.numer_zamowienia IS NOT NULL
        AND doob.id IN (:p_id)',
-                   '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                        '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
                      <xsl:template match="node()|@*">
@@ -5858,9 +6080,9 @@ SELECT konr.symbol contractors_id,
                         <LINE><xsl:apply-templates/></LINE>
                      </xsl:template>
                   </xsl:stylesheet>',
-                   'IN/deliveries',
-                   'T',
-                   'OUT');
+                        'IN/deliveries',
+                        'T',
+                        'OUT');
 END;
 /
 
@@ -5868,15 +6090,15 @@ BEGIN
     lg_sql_wykonywanie.wykonaj_ddl (
         p_wyrazenie   => 'begin DBMS_SCHEDULER.DROP_JOB(job_name=> ''INTEGRACJAINFINITE''); end;',
         p_nr_bledu    => -27475);
-        
+
     lg_sql_wykonywanie.wykonaj_ddl (
         p_wyrazenie   => 'begin DBMS_SCHEDULER.DROP_JOB(job_name=> ''INTEGRACJA_INFINITE_OUT''); end;',
         p_nr_bledu    => -27475);
-    
+
     lg_sql_wykonywanie.wykonaj_ddl (
         p_wyrazenie   => 'begin DBMS_SCHEDULER.DROP_JOB(job_name=> ''INTEGRACJA_INFINITE_IN''); end;',
         p_nr_bledu    => -27475);
-        
+
     DBMS_SCHEDULER.create_job (
         '"INTEGRACJA_INFINITE_OUT"',
         job_type              => 'PLSQL_BLOCK',
@@ -5893,7 +6115,7 @@ BEGIN
         auto_drop             => TRUE,
         comments              => NULL);
     DBMS_SCHEDULER.enable ('"INTEGRACJA_INFINITE_OUT"');
-    
+
     DBMS_SCHEDULER.create_job (
         '"INTEGRACJA_INFINITE_IN"',
         job_type              => 'PLSQL_BLOCK',
@@ -5910,7 +6132,7 @@ BEGIN
         auto_drop             => TRUE,
         comments              => NULL);
     DBMS_SCHEDULER.enable ('"INTEGRACJA_INFINITE_IN"');
-    
+
     COMMIT;
 END;
 /
