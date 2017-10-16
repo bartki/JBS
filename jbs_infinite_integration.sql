@@ -2410,9 +2410,7 @@ IS
 
         IF lg_sord_agd.global_discount (p_id => v_sord_id) != 0
         THEN
-            lg_dosp_def.zmien_dolaczono_upust_glb (
-                p_dosp_id               => v_sord_id,
-                p_dolaczono_upust_glb   => 'T');
+            lg_dosp_def.dolacz_up_g_do_dosi_dla_dosp(p_dosp_id=> v_sord_id);
         END IF;
 
         /*UPDATE lg_sal_orders
@@ -4508,7 +4506,7 @@ GROUP BY rndo.symbol_dokumentu,
                                               requested_delivery_date_bc  VARCHAR2 (30)      PATH ''/Order/OrderHeader/RequestedDeliveryDate'',
                                               note                                         VARCHAR2 (100)     PATH ''/Order/OrderHeader/Comment'',
                                               payment_date                         VARCHAR2(30)     PATH ''/Order/OrderHeader/PaymentDate'',
-                                              order_discount                        VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderDiscount'',                                               
+                                              order_discount                        VARCHAR2 (5)       PATH ''/Order/OrderHeader/OrderDiscount'',                                               
                                               payment_method_code          VARCHAR2 (6)       PATH ''/Order/OrderHeader/PaymentMethod/Code'',
                                               transportation_code               VARCHAR2 (3)       PATH ''/Order/OrderHeader/Transportation/Code'',                                               
                                               seller_buyer_id                       VARCHAR2 (30)      PATH ''/Order/OrderParty/BuyerParty/SellerBuyerID'',
