@@ -1503,7 +1503,7 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
 
         IF lg_sord_agd.global_discount (p_id => v_sord_id) != 0
         THEN
-            lg_dosp_def.zmien_dolaczono_upust_glb (p_dosp_id => v_sord_id, p_dolaczono_upust_glb => 'T');
+            lg_dosp_def.dolacz_up_g_do_dosi_dla_dosp(p_dosp_id=> v_sord_id);
         END IF;
 
         /*UPDATE lg_sal_orders
