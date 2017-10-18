@@ -1506,9 +1506,19 @@ CREATE OR REPLACE PACKAGE BODY jg_input_sync IS
             lg_dosp_def.dolacz_up_g_do_dosi_dla_dosp(p_dosp_id=> v_sord_id);
         END IF;
 
-        /*UPDATE lg_sal_orders
-           SET generate_warehouse_doc = 'T'
-         WHERE id = v_sord_id;*/
+        IF Lg_Sord_Agd.Payment_Form(p_id=> v_sord_id) = 'POBR'
+        THEN
+            UPDATE lg_sal_orders
+               SET N_01 = gross_value
+             WHERE id = v_sord_id;
+        END IF;
+
+        IF Lg_Wzrc_Agd.generate_warehouse_doc(p_id=> Lg_Sord_Agd.wzrc_id(p_id=> v_sord_id)) = 'T'
+        THEN
+             UPDATE lg_sal_orders
+                SET generate_warehouse_doc = 'T'
+              WHERE id = v_sord_id;
+        END IF;
 
         IF   (     v_order_type = 'R'
                AND check_reservations(v_sord_id))
