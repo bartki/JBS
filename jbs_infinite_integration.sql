@@ -2413,9 +2413,19 @@ IS
             lg_dosp_def.dolacz_up_g_do_dosi_dla_dosp(p_dosp_id=> v_sord_id);
         END IF;
 
-        /*UPDATE lg_sal_orders
-           SET generate_warehouse_doc = 'T'
-         WHERE id = v_sord_id;*/
+        IF Lg_Sord_Agd.Payment_Form(p_id=> v_sord_id) = 'POBR'
+        THEN
+            UPDATE lg_sal_orders
+               SET N_01 = gross_value
+             WHERE id = v_sord_id;
+        END IF;
+
+        IF Lg_Wzrc_Agd.generate_warehouse_doc(p_id=> Lg_Sord_Agd.wzrc_id(p_id=> v_sord_id)) = 'T'
+        THEN
+             UPDATE lg_sal_orders
+                SET generate_warehouse_doc = 'T'
+              WHERE id = v_sord_id;
+        END IF;
 
         IF    (v_order_type = 'R' AND check_reservations (v_sord_id))
            OR v_order_type = 'O'
@@ -4422,7 +4432,7 @@ GROUP BY rndo.symbol_dokumentu,
                             pa_firm_sql.kod (wzrc.firm_id) company_code,
                             wzrc.place_of_issue place_of_issue,
                             NVL (wzrc.base_currency, wzrc.currency) currency,
-                            NVL(header.payment_date, wzrc.payment_days) payment_days,
+			    NVL(decode(payment_method_code,''GOT'',0,''POBR'',0,''KARTA'',0,header.payment_date), wzrc.payment_days) payment_days,
                             pusp.kod pusp_kod,
                             NVL(header.net_value * (header.order_discount/ 100), 0) order_discount_value,
                             CURSOR ( SELECT konr.symbol,
@@ -4450,7 +4460,7 @@ GROUP BY rndo.symbol_dokumentu,
                                             adge.poczta
                                        FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
                                       WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
-                                            AND konr.symbol = header.seller_buyer_id) platnik,
+                                            AND konr.id = (SELECT nvl(odb.platnik_id,odb.id) from ap_kontrahenci odb where odb.symbol = header.seller_buyer_id))  platnik,					    
                             CURSOR ( SELECT konr.symbol,
                                             konr.nazwa,
                                             konr.skrot,
@@ -4476,7 +4486,7 @@ GROUP BY rndo.symbol_dokumentu,
                                             XMLTABLE ( ''//Order/OrderDetail/Item''
                                                        PASSING xmltype (log1.xml)
                                                        COLUMNS item_num               VARCHAR2 (30) PATH ''/Item/ItemNum'',
-                                                               item_id                VARCHAR2 (30) PATH ''/Item/ItemID'',
+						               item_id                VARCHAR2 (30) PATH ''/Item/ItemID'',
                                                                seller_item_id         VARCHAR2 (30) PATH ''/Item/SellerItemID'',
                                                                name                   VARCHAR2 (70) PATH ''/Item/Name'',                                                               
                                                                unit_of_measure        VARCHAR2 (30) PATH ''/Item/UnitOfMeasure'',                                                               
@@ -4504,6 +4514,7 @@ GROUP BY rndo.symbol_dokumentu,
                                               order_type                              VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderType'',
                                               order_issue_date_bc              VARCHAR2 (30)      PATH ''/Order/OrderHeader/OrderIssueDate'',
                                               requested_delivery_date_bc  VARCHAR2 (30)      PATH ''/Order/OrderHeader/RequestedDeliveryDate'',
+					      contract_id                              VARCHAR2 (10)     PATH ''/Order/OrderHeader/ContractID'',
                                               note                                         VARCHAR2 (100)     PATH ''/Order/OrderHeader/Comment'',
                                               payment_date                         VARCHAR2(30)     PATH ''/Order/OrderHeader/PaymentDate'',
                                               order_discount                        VARCHAR2 (5)       PATH ''/Order/OrderHeader/OrderDiscount'',                                               
@@ -4793,6 +4804,14 @@ GROUP BY rndo.symbol_dokumentu,
               </WARTOSC>
             </PA_POLE_DODATKOWE_T>
           </xsl:for-each>
+	  <xsl:for-each select="CONTRACT_ID">
+            <PA_POLE_DODATKOWE_T>
+              <NAZWA>ATRYBUT_T05</NAZWA>
+              <WARTOSC>
+                <xsl:value-of select="."/>
+              </WARTOSC>
+            </PA_POLE_DODATKOWE_T>
+          </xsl:for-each> 
         </POLA_DODATKOWE>
         <POZYCJE>
           <xsl:for-each select="ITEMS">
@@ -4880,7 +4899,7 @@ GROUP BY rndo.symbol_dokumentu,
                       </WARTOSC>
                     </PA_POLE_DODATKOWE_T>
                   </xsl:for-each>
-                  <xsl:for-each select="ITEM_ID">
+		  <xsl:for-each select="ITEM_ID">
                     <PA_POLE_DODATKOWE_T>
                       <NAZWA>ATRYBUT_N01</NAZWA>
                       <WARTOSC>
@@ -4902,6 +4921,7 @@ GROUP BY rndo.symbol_dokumentu,
     </LG_ZASP_T>
   </xsl:template>
 </xsl:stylesheet>';
+
 
     INSERT INTO jg_sql_repository (id,
                                    object_type,
