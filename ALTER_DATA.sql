@@ -241,7 +241,7 @@ GROUP BY rndo.symbol_dokumentu,
                          konr.nazwa name,
                          konr.skrot short_name,
                          konr.nip nip,
-                         konr.blokada_sprz order_blockade,
+                         konr_payer.blokada_sprz order_blockade,
                          NVL(konr.aktualny, ''N'') active,
                          konr.platnik is_payer,
                          konr.odbiorca is_reciever,
@@ -250,10 +250,10 @@ GROUP BY rndo.symbol_dokumentu,
                          konr.nr_faksu fax,
                          konr.mail email,
                          --konr.dni_do_zaplaty day_topay,
-                         jg_output_sync.format_number(lg_knr_likr_sql.aktualny_limit_konr_kwota(konr.id, pa_sesja.dzisiaj), 2) credit_limit,
+                         jg_output_sync.format_number(lg_knr_likr_sql.aktualny_limit_konr_kwota(konr_payer.id, pa_sesja.dzisiaj), 2) credit_limit,
                          (SELECT grupa
                             FROM ap_grupy_odbiorcow grod
-                           WHERE grod.id = konr.grod_id) reciever_group,
+                           WHERE grod.id = konr_payer.grod_id) reciever_group,
                          (SELECT MAX(osol.kod)
                             FROM lg_osoby_log osol,
                          (SELECT *
@@ -265,7 +265,7 @@ GROUP BY rndo.symbol_dokumentu,
                                  AND grko.id = kngr.grkn_id
                                  AND osol.aktualna = ''T''
                                  AND kngr.konr_id = konr.id) representative,
-                                     konr.foza_kod default_financing_method,
+                                     konr_payer.foza_kod default_financing_method,
                           CURSOR (SELECT ulica        street,
                                          nr_domu      house_number,
                                          nr_lokalu    flat_number,
@@ -286,7 +286,7 @@ GROUP BY rndo.symbol_dokumentu,
                                          AND rola_adresu = ''DOSTAWY'') delivery_addresses
                     FROM ap_kontrahenci konr, ap_kontrahenci konr_payer
                    WHERE     konr_payer.id(+) = konr.platnik_id
-                         AND konr.id IN (:p_id)',
+                         AND (konr.id IN (:p_id) or konr.platnik_id in (:p_id))',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                     <xsl:output method="xml" version="1.0" indent="yes" omit-xml-declaration="no" />
                     <xsl:strip-space elements="*"/>
@@ -1907,21 +1907,21 @@ GROUP BY fwk.konr_symbol',
                        half_year_threshold,
                        year_threshold)))
 SELECT konr.symbol contractors_id,
-       konr.nr_umowy_ind AS contract_number,
+       konr_payer.nr_umowy_ind AS contract_number,
        DECODE (individual_contract,
-               ''T'', konr.data_umowy_ind,
-               konr.atrybut_d01)
+               ''T'', konr_payer.data_umowy_ind,
+               konr_payer.atrybut_d01)
            AS contract_date,
        individual_contract AS individual_contract,
-       konr.foza_kod AS default_payment_type,
-       NVL (konr.limit_kredytowy, 0) AS credit_limit,
-       konr.dni_do_zaplaty AS payment_date,
+       konr_payer.foza_kod AS default_payment_type,
+       NVL (konr_payer.limit_kredytowy, 0) AS credit_limit,
+       konr_payer.dni_do_zaplaty AS payment_date,
        SUBSTR (grod.grupa, 2, 2) AS discount_percent,
        CURSOR (
            SELECT col_name,
                   jg_output_sync.format_number (quantity, 2) quantity
              FROM ind_co_data icd
-            WHERE quantity IS NOT NULL AND icd.konr_id = konr.id)
+            WHERE quantity IS NOT NULL AND icd.konr_id = konr_payer.id)
            AS bonus_points,
        DECODE (
            (SELECT COUNT (*)
@@ -1931,7 +1931,7 @@ SELECT konr.symbol contractors_id,
              WHERE     upta1.symbol = ''SKONTO''
                    AND SYSDATE BETWEEN prup1.data_od
                                    AND NVL (prup1.data_do, SYSDATE)
-                   AND prup1.konr_id = konr.id),
+                   AND prup1.konr_id = konr_payer.id),
            0, ''N'',
            ''T'')
            skonto
@@ -1941,11 +1941,12 @@ SELECT konr.symbol contractors_id,
                END
                    individual_contract,
                konr.*
-          FROM ap_kontrahenci konr) konr,
+          FROM ap_kontrahenci konr) konr_payer,
+          ap_kontrahenci konr,
        ap_grupy_odbiorcow grod
- WHERE     grod.id(+) = konr.grod_id
-       AND konr.platnik = ''T''
-       AND konr.id IN (:p_id)',
+ WHERE     grod.id(+) = konr_payer.grod_id
+        AND konr_payer.id = konr.platnik_id
+       AND (konr.id IN (:p_id) or konr.platnik_id in (:p_id))',
                    '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
