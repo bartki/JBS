@@ -1180,7 +1180,8 @@ IS
 END;
 /
 
-CREATE OR REPLACE PACKAGE BODY jg_output_sync
+CREATE OR REPLACE 
+PACKAGE BODY jg_output_sync
 IS
     ------------------------------------------------------------------------------------------------------------------------
     FUNCTION format_number (p_number IN NUMBER, p_digit IN INT)
@@ -1666,6 +1667,52 @@ IS
 
                     delete_observed_operations (v_batch_guid);
                     COMMIT;
+
+                    FOR r_operation IN (SELECT *
+                                          FROM jg_output_log
+                                         WHERE status = 'READY')
+                    LOOP
+                        v_status := NULL;
+
+                        SAVEPOINT send_file;
+                        r_sqre := sqre_rt (r_operation.object_type);
+
+                        BEGIN
+                            v_file_name :=
+                                   NVL (r_sqre.file_location, 'IN/')
+                                || '/'
+                                || REPLACE (
+                                          r_operation.object_type
+                                       || '_'
+                                       || r_operation.id
+                                       || '_'
+                                       || TO_CHAR (SYSTIMESTAMP,
+                                                   'YYYYMMDD_HH24MISS')
+                                       || '.xml',
+                                       '/',
+                                       '-');
+
+
+                            send_text_file_to_ftp (
+                                p_xml         => r_operation.xml,
+                                p_file_name   => v_file_name);
+
+                            save_result (p_guid        => r_operation.guid,
+                                         p_status      => 'PROCESSED',
+                                         p_file_name   => v_file_name);
+                            COMMIT;
+                        EXCEPTION
+                            WHEN OTHERS
+                            THEN
+                                ROLLBACK TO send_file;
+                                save_result (
+                                    p_guid     => r_operation.guid,
+                                    p_status   => 'ERROR',
+                                    p_error    =>    SQLERRM
+                                                  || CHR (13)
+                                                  || DBMS_UTILITY.format_error_backtrace);
+                        END;
+                    END LOOP;
                 EXCEPTION
                     WHEN OTHERS
                     THEN
@@ -1684,49 +1731,6 @@ IS
         END LOOP;
 
 
-        FOR r_operation IN (SELECT *
-                              FROM jg_output_log
-                             WHERE status = 'READY')
-        LOOP
-            v_status := NULL;
-
-            SAVEPOINT send_file;
-            r_sqre := sqre_rt (r_operation.object_type);
-
-            BEGIN
-                v_file_name :=
-                       NVL (r_sqre.file_location, 'IN/')
-                    || '/'
-                    || REPLACE (
-                              r_operation.object_type
-                           || '_'
-                           || r_operation.id
-                           || '_'
-                           || TO_CHAR (SYSTIMESTAMP, 'YYYYMMDD_HH24MISS')
-                           || '.xml',
-                           '/',
-                           '-');
-
-
-                send_text_file_to_ftp (p_xml         => r_operation.xml,
-                                       p_file_name   => v_file_name);
-
-                save_result (p_guid        => r_operation.guid,
-                             p_status      => 'PROCESSED',
-                             p_file_name   => v_file_name);
-                COMMIT;
-            EXCEPTION
-                WHEN OTHERS
-                THEN
-                    ROLLBACK TO send_file;
-                    save_result (
-                        p_guid     => r_operation.guid,
-                        p_status   => 'ERROR',
-                        p_error    =>    SQLERRM
-                                      || CHR (13)
-                                      || DBMS_UTILITY.format_error_backtrace);
-            END;
-        END LOOP;
 
         FOR r_operation IN (SELECT *
                               FROM jg_observed_operations
@@ -1778,8 +1782,6 @@ IS
 END;
 /
 
-
--- End of DDL Script for Package Body TETA_ADMIN.JG_OUTPUT_SYNC
 CREATE OR REPLACE PACKAGE jg_input_sync
 IS
     ------------------------------------------------------------------------------------------------------------------------
