@@ -4148,7 +4148,6 @@ GROUP BY rndo.symbol_dokumentu,
        ec ec,
        inma.jdmr_nazwa base_unit_of_measure_code,
        BIN_TO_NUM (DECODE (atrybut_c01, ''T'', 1, 0), DECODE (ec, ''T'', 1, 0), DECODE (w_ofercie, ''T'', 1, 0), DECODE (mozliwe_sprzedawanie, ''T'', 1, 0)) AVAILABILITY,
-
   (SELECT MAX (kod_kreskowy) ean
    FROM lg_przeliczniki_jednostek prje
    WHERE prje.kod_kreskowy IS NOT NULL
@@ -4158,15 +4157,10 @@ GROUP BY rndo.symbol_dokumentu,
    FROM cg_ref_codes
    WHERE rv_domain = ''LG_CECHY_INMA''
      AND rv_low_value = inma.cecha) TYPE,
-
   (SELECT stva.stopa
    FROM rk_stawki_vat stva
    WHERE stva.id = inma.stva_id) vat_rate,
-                                    NVL (
-                                           (SELECT zapas_min
-                                            FROM ap_inma_maga_zapasy inmz
-                                            WHERE inmz.inma_id = inma.id
-                                              AND inmz.maga_id = 500), 0) min_stock,
+                                    NVL ( (SELECT zapas_min FROM ap_inma_maga_zapasy inmz WHERE inmz.inma_id = inma.id AND inmz.maga_id = 500), 0) min_stock,
 CURSOR
   (SELECT jdmr_nazwa unit_of_measure_code,
           kod_kreskowy ean_code
@@ -4202,39 +4196,18 @@ CURSOR
           OR wace.data_do IS NULL)
      AND wace.inma_id = inma.id) minimal_prices,
 CURSOR
-  ( SELECT poziom_2_kod group_code,
-           poziom_2_grupa group_name,
-           min(poziom_3_kod) OVER (PARTITION BY poziom_3_grupa) AS subgroup_code,
-                                  poziom_3_grupa subgroup_name
+  ( SELECT poziom_2_kod group_code, poziom_2_grupa group_name, min(poziom_3_kod) OVER (PARTITION BY poziom_3_grupa) AS subgroup_code, poziom_3_grupa subgroup_name
    FROM
      (SELECT inma_id,
              poziom_2_kod,
              nvl(poziom_4_kod,nvl(poziom_3_kod,poziom_2_kod)) AS poziom_3_kod,
              poziom_2_grupa,
              nvl(poziom_4_grupa,nvl(poziom_3_grupa,poziom_2_grupa)) AS poziom_3_grupa
-      FROM
-        (SELECT gras.id,
-                gr.root_kod,
-                kod,
-                grupa_asortymentowa,
-                poziom - LEVEL AS poziom,
-                                  connect_by_root grupa_asortymentowa AS grupa_nad,
-                                  connect_by_root kod AS kod_nad
-         FROM ap_grupy_asortymentowe gras
-         JOIN
-           (SELECT connect_by_root gras.kod AS root_kod,
-                   id,
-                   LEVEL AS poziom
-            FROM ap_grupy_asortymentowe gras CONNECT BY
-            PRIOR gras.id = gras.gras_id_nad START WITH kod IN (''GRAS 2013'')) gr ON gr.id = gras.id
-         WHERE gr.poziom <> 1 CONNECT BY
-           PRIOR gras.id = gras.gras_id_nad ) a
-      JOIN ap_grupy_indeksow grin ON grin.gras_id = a.id pivot(max(grupa_nad) AS grupa,max(kod_nad) AS kod
-                                                               FOR poziom IN (1 AS "POZIOM_1",2 AS "POZIOM_2",3 AS "POZIOM_3",4 AS "POZIOM_4"))) b
+      FROM (SELECT gras.id, gr.root_kod, kod, grupa_asortymentowa, poziom - LEVEL AS poziom, connect_by_root grupa_asortymentowa AS grupa_nad, connect_by_root kod AS kod_nad
+         FROM ap_grupy_asortymentowe gras JOIN (SELECT connect_by_root gras.kod AS root_kod, id, LEVEL AS poziom FROM ap_grupy_asortymentowe gras CONNECT BY PRIOR gras.id = gras.gras_id_nad START WITH kod IN (''GRAS 2013'')) gr ON gr.id = gras.id
+         WHERE gr.poziom <> 1 CONNECT BY PRIOR gras.id = gras.gras_id_nad ) a JOIN ap_grupy_indeksow grin ON grin.gras_id = a.id pivot(max(grupa_nad) AS grupa,max(kod_nad) AS kod FOR poziom IN (1 AS "POZIOM_1",2 AS "POZIOM_2",3 AS "POZIOM_3",4 AS "POZIOM_4"))) b
    WHERE poziom_2_kod IS NOT NULL
-     AND b.inma_id = inma.id ) groups
-FROM ap_indeksy_materialowe inma
-WHERE inma.id IN (:p_id)',
+     AND b.inma_id = inma.id ) groups FROM ap_indeksy_materialowe inma WHERE inma.id IN (:p_id)',
                         '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
