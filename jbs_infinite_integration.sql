@@ -4147,86 +4147,94 @@ GROUP BY rndo.symbol_dokumentu,
        inma.nazwa name,
        ec ec,
        inma.jdmr_nazwa base_unit_of_measure_code,
-       BIN_TO_NUM (DECODE (atrybut_c01, ''T'', 1, 0),
-                   DECODE (ec, ''T'', 1, 0),
-                   DECODE (w_ofercie, ''T'', 1, 0),
-                   DECODE (mozliwe_sprzedawanie, ''T'', 1, 0)) AVAILABILITY,
-       (SELECT MAX (kod_kreskowy) ean
-          FROM lg_przeliczniki_jednostek prje
-         WHERE     prje.kod_kreskowy IS NOT NULL
-               AND prje.inma_id = inma.id
-               AND prje.jdmr_nazwa = inma.jdmr_nazwa)
-           base_ean_code,
-       (SELECT rv_meaning
-          FROM cg_ref_codes
-         WHERE rv_domain = ''LG_CECHY_INMA'' AND rv_low_value = inma.cecha)
-           TYPE,
-       (SELECT stva.stopa
-          FROM rk_stawki_vat stva
-         WHERE stva.id = inma.stva_id)
-           vat_rate,
-       NVL ( (SELECT zapas_min
-                FROM ap_inma_maga_zapasy inmz
-               WHERE inmz.inma_id = inma.id AND inmz.maga_id = 500),
-            0)
-           min_stock,
-       CURSOR (SELECT jdmr_nazwa unit_of_measure_code, kod_kreskowy ean_code
-                 FROM lg_przeliczniki_jednostek prje
-                WHERE prje.inma_id = inma.id)
-           units_of_measure,
-       CURSOR (
-           SELECT walu.kod currency,
-                  jg_output_sync.format_number (cezb.cena, 4) net_price,
-                  jg_output_sync.format_number (cezb.cena_brutto, 4)
-                      gross_price,
-                  cezb.jdmr_nazwa unit_of_measure_code,
-                  rcez.rodzaj price_type
-             FROM ap_ceny_zbytu cezb,
-                  ap_rodzaje_ceny_zbytu rcez,
-                  rk_waluty walu
-            WHERE     cezb.rcez_id = rcez.id
-                  AND cezb.typ = ''SPRZEDAZ''
-                  AND cezb.grod_id IS NULL
-                  AND cezb.gras_id IS NULL
-                  AND cezb.konr_id IS NULL
-                  AND walu.id = cezb.walu_id
-                  AND cezb.sprzedaz = ''T''
-                  AND lg_cezb_sql.aktualna_tn (cezb.id) = ''T''
-                  AND cezb.inma_id = inma.id)
-           prices,
-       CURSOR (
-           SELECT jg_output_sync.format_number (wace.price_min_net, 4)
-                      net_price,
-                  jg_output_sync.format_number (wace.price_min_gross, 4)
-                      gross_price,
-                  wace.jdmr_nazwa unit_of_measure_code
-             FROM lg_wah_warunki_cen wace
-            WHERE     wace.price_min_net IS NOT NULL
-                  AND wace.price_min_gross IS NOT NULL
-                  AND wace.data_od <= SYSDATE
-                  AND (wace.data_do >= SYSDATE OR wace.data_do IS NULL)
-                  AND wace.inma_id = inma.id)
-           minimal_prices,
-       CURSOR (
-           SELECT distinct gras.grupa_asortymentowa group_name,
-                  min(gras2.kod) over (partition by gras.grupa_asortymentowa) group_code,
-                  grin.podstawowa is_primary
-             FROM ap_grupy_indeksow grin, ap_grupy_asortymentowe gras,ap_grupy_asortymentowe gras2
-            WHERE     gras.id = grin.gras_id
-                  AND grin.inma_id = inma.id
-                  AND gras2.grupa_asortymentowa = gras.grupa_asortymentowa
-                  AND gras.id IN (SELECT gras.id
-                                    FROM ap_grupy_asortymentowe gras
-                                  CONNECT BY PRIOR gras.id = gras.gras_id_nad
-                                  START WITH gras.kod = ''GRAS 2013'')
-                  AND gras2.id IN (SELECT gras.id
-                                    FROM ap_grupy_asortymentowe gras
-                                  CONNECT BY PRIOR gras.id = gras.gras_id_nad
-                                  START WITH gras.kod = ''GRAS 2013''))
-                                          
-           groups
-  FROM ap_indeksy_materialowe inma
- WHERE inma.id IN (:p_id)',
+       BIN_TO_NUM (DECODE (atrybut_c01, ''T'', 1, 0), DECODE (ec, ''T'', 1, 0), DECODE (w_ofercie, ''T'', 1, 0), DECODE (mozliwe_sprzedawanie, ''T'', 1, 0)) AVAILABILITY,
+
+  (SELECT MAX (kod_kreskowy) ean
+   FROM lg_przeliczniki_jednostek prje
+   WHERE prje.kod_kreskowy IS NOT NULL
+     AND prje.inma_id = inma.id
+     AND prje.jdmr_nazwa = inma.jdmr_nazwa) base_ean_code,
+  (SELECT rv_meaning
+   FROM cg_ref_codes
+   WHERE rv_domain = ''LG_CECHY_INMA''
+     AND rv_low_value = inma.cecha) TYPE,
+
+  (SELECT stva.stopa
+   FROM rk_stawki_vat stva
+   WHERE stva.id = inma.stva_id) vat_rate,
+                                    NVL (
+                                           (SELECT zapas_min
+                                            FROM ap_inma_maga_zapasy inmz
+                                            WHERE inmz.inma_id = inma.id
+                                              AND inmz.maga_id = 500), 0) min_stock,
+CURSOR
+  (SELECT jdmr_nazwa unit_of_measure_code,
+          kod_kreskowy ean_code
+   FROM lg_przeliczniki_jednostek prje
+   WHERE prje.inma_id = inma.id) units_of_measure,
+CURSOR
+  ( SELECT walu.kod currency,
+           jg_output_sync.format_number (cezb.cena, 4) net_price,
+           jg_output_sync.format_number (cezb.cena_brutto, 4) gross_price,
+           cezb.jdmr_nazwa unit_of_measure_code,
+           rcez.rodzaj price_type
+   FROM ap_ceny_zbytu cezb,
+        ap_rodzaje_ceny_zbytu rcez,
+        rk_waluty walu
+   WHERE cezb.rcez_id = rcez.id
+     AND cezb.typ = ''SPRZEDAZ''
+     AND cezb.grod_id IS NULL
+     AND cezb.gras_id IS NULL
+     AND cezb.konr_id IS NULL
+     AND walu.id = cezb.walu_id
+     AND cezb.sprzedaz = ''T''
+     AND lg_cezb_sql.aktualna_tn (cezb.id) = ''T''
+     AND cezb.inma_id = inma.id) prices,
+CURSOR
+  ( SELECT jg_output_sync.format_number (wace.price_min_net, 4) net_price,
+           jg_output_sync.format_number (wace.price_min_gross, 4) gross_price,
+           wace.jdmr_nazwa unit_of_measure_code
+   FROM lg_wah_warunki_cen wace
+   WHERE wace.price_min_net IS NOT NULL
+     AND wace.price_min_gross IS NOT NULL
+     AND wace.data_od <= SYSDATE
+     AND (wace.data_do >= SYSDATE
+          OR wace.data_do IS NULL)
+     AND wace.inma_id = inma.id) minimal_prices,
+CURSOR
+  ( SELECT poziom_2_kod group_code,
+           poziom_2_grupa group_name,
+           min(poziom_3_kod) OVER (PARTITION BY poziom_3_grupa) AS subgroup_code,
+                                  poziom_3_grupa subgroup_name
+   FROM
+     (SELECT inma_id,
+             poziom_2_kod,
+             nvl(poziom_4_kod,nvl(poziom_3_kod,poziom_2_kod)) AS poziom_3_kod,
+             poziom_2_grupa,
+             nvl(poziom_4_grupa,nvl(poziom_3_grupa,poziom_2_grupa)) AS poziom_3_grupa
+      FROM
+        (SELECT gras.id,
+                gr.root_kod,
+                kod,
+                grupa_asortymentowa,
+                poziom - LEVEL AS poziom,
+                                  connect_by_root grupa_asortymentowa AS grupa_nad,
+                                  connect_by_root kod AS kod_nad
+         FROM ap_grupy_asortymentowe gras
+         JOIN
+           (SELECT connect_by_root gras.kod AS root_kod,
+                   id,
+                   LEVEL AS poziom
+            FROM ap_grupy_asortymentowe gras CONNECT BY
+            PRIOR gras.id = gras.gras_id_nad START WITH kod IN (''GRAS 2013'')) gr ON gr.id = gras.id
+         WHERE gr.poziom <> 1 CONNECT BY
+           PRIOR gras.id = gras.gras_id_nad ) a
+      JOIN ap_grupy_indeksow grin ON grin.gras_id = a.id pivot(max(grupa_nad) AS grupa,max(kod_nad) AS kod
+                                                               FOR poziom IN (1 AS "POZIOM_1",2 AS "POZIOM_2",3 AS "POZIOM_3",4 AS "POZIOM_4"))) b
+   WHERE poziom_2_kod IS NOT NULL
+     AND b.inma_id = inma.id ) groups
+FROM ap_indeksy_materialowe inma
+WHERE inma.id IN (:p_id)',
                         '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
@@ -4432,7 +4440,7 @@ GROUP BY rndo.symbol_dokumentu,
                             pa_firm_sql.kod (wzrc.firm_id) company_code,
                             wzrc.place_of_issue place_of_issue,
                             NVL (wzrc.base_currency, wzrc.currency) currency,
-			    NVL(decode(payment_method_code,''GOT'',0,''POBR'',0,''KARTA'',0,header.payment_date), wzrc.payment_days) payment_days,
+                NVL(decode(payment_method_code,''GOT'',0,''POBR'',0,''KARTA'',0,header.payment_date), wzrc.payment_days) payment_days,
                             pusp.kod pusp_kod,
                             NVL(header.net_value * (header.order_discount/ 100), 0) order_discount_value,
                             CURSOR ( SELECT konr.symbol,
@@ -4460,7 +4468,7 @@ GROUP BY rndo.symbol_dokumentu,
                                             adge.poczta
                                        FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
                                       WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
-                                            AND konr.id = (SELECT nvl(odb.platnik_id,odb.id) from ap_kontrahenci odb where odb.symbol = header.seller_buyer_id))  platnik,					    
+                                            AND konr.id = (SELECT nvl(odb.platnik_id,odb.id) from ap_kontrahenci odb where odb.symbol = header.seller_buyer_id))  platnik,                        
                             CURSOR ( SELECT konr.symbol,
                                             konr.nazwa,
                                             konr.skrot,
@@ -4486,7 +4494,7 @@ GROUP BY rndo.symbol_dokumentu,
                                             XMLTABLE ( ''//Order/OrderDetail/Item''
                                                        PASSING xmltype (log1.xml)
                                                        COLUMNS item_num               VARCHAR2 (30) PATH ''/Item/ItemNum'',
-						               item_id                VARCHAR2 (30) PATH ''/Item/ItemID'',
+                                       item_id                VARCHAR2 (30) PATH ''/Item/ItemID'',
                                                                seller_item_id         VARCHAR2 (30) PATH ''/Item/SellerItemID'',
                                                                name                   VARCHAR2 (70) PATH ''/Item/Name'',                                                               
                                                                unit_of_measure        VARCHAR2 (30) PATH ''/Item/UnitOfMeasure'',                                                               
@@ -4514,7 +4522,7 @@ GROUP BY rndo.symbol_dokumentu,
                                               order_type                              VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderType'',
                                               order_issue_date_bc              VARCHAR2 (30)      PATH ''/Order/OrderHeader/OrderIssueDate'',
                                               requested_delivery_date_bc  VARCHAR2 (30)      PATH ''/Order/OrderHeader/RequestedDeliveryDate'',
-					      contract_id                              VARCHAR2 (10)     PATH ''/Order/OrderHeader/ContractID'',
+                          contract_id                              VARCHAR2 (30)     PATH ''/Order/OrderHeader/ContractID'',
                                               note                                         VARCHAR2 (100)     PATH ''/Order/OrderHeader/Comment'',
                                               payment_date                         VARCHAR2(30)     PATH ''/Order/OrderHeader/PaymentDate'',
                                               order_discount                        VARCHAR2 (5)       PATH ''/Order/OrderHeader/OrderDiscount'',                                               
@@ -4804,7 +4812,7 @@ GROUP BY rndo.symbol_dokumentu,
               </WARTOSC>
             </PA_POLE_DODATKOWE_T>
           </xsl:for-each>
-	  <xsl:for-each select="CONTRACT_ID">
+      <xsl:for-each select="CONTRACT_ID">
             <PA_POLE_DODATKOWE_T>
               <NAZWA>ATRYBUT_T05</NAZWA>
               <WARTOSC>
@@ -4899,7 +4907,7 @@ GROUP BY rndo.symbol_dokumentu,
                       </WARTOSC>
                     </PA_POLE_DODATKOWE_T>
                   </xsl:for-each>
-		  <xsl:for-each select="ITEM_ID">
+          <xsl:for-each select="ITEM_ID">
                     <PA_POLE_DODATKOWE_T>
                       <NAZWA>ATRYBUT_N01</NAZWA>
                       <WARTOSC>
