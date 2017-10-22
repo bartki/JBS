@@ -5890,18 +5890,8 @@ GROUP BY fwk.konr_symbol',
                         'T',
                         'OUT');
 
-    INSERT INTO jg_sql_repository (id,
-                                   object_type,
-                                   sql_query,
-                                   xslt,
-                                   file_location,
-                                   up_to_date,
-                                   direction)
-             VALUES (
-                        jg_sqre_seq.NEXTVAL,
-                        'TRADE_CONTRACTS',
-                        'WITH ind_co
-     AS (SELECT konr.id AS konr_id,
+    v_order_clob := 'WITH ind_co
+                AS (SELECT konr.id AS konr_id,
                 DECODE (individual_contract,
                         ''T'', a_mp_dekoduj_pkt (konr.atrybut_t07, 0),
                         atrybut_n04)
@@ -5995,7 +5985,19 @@ SELECT konr.symbol contractors_id,
        ap_grupy_odbiorcow grod
  WHERE     grod.id(+) = konr_payer.grod_id
         AND konr_payer.id = konr.platnik_id
-       AND (konr.id IN (:p_id) or konr.platnik_id in (:p_id))',
+       AND (konr.id IN (:p_id) or konr.platnik_id in (:p_id))';
+
+    INSERT INTO jg_sql_repository (id,
+                                   object_type,
+                                   sql_query,
+                                   xslt,
+                                   file_location,
+                                   up_to_date,
+                                   direction)
+             VALUES (
+                        jg_sqre_seq.NEXTVAL,
+                        'TRADE_CONTRACTS',
+                        v_order_clob,
                         '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
                      <xsl:output method="xml" version="1.5" indent="yes" omit-xml-declaration="no" />
                      <xsl:strip-space elements="*"/>
