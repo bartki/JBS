@@ -392,7 +392,32 @@ GROUP BY rndo.symbol_dokumentu,
                    'OUT');
 
     v_order_clob :=
-        'SELECT header.*,
+        'with item_xml
+as (
+select log1.id as log_id,item_xml.*,
+sum(item_xml.unit_price_value *item_xml.quantity_value) over (partition by log1.id) as order_val,
+sum(item_xml.unit_price_base *item_xml.quantity_value) over (partition by log1.id) as order_val_bf_disc
+from 
+jg_input_log log1,
+XMLTABLE ( ''//Order/OrderDetail/Item''
+                                                       PASSING xmltype (log1.xml)
+                                                       COLUMNS item_num               VARCHAR2 (30) PATH ''/Item/ItemNum'',
+                                                               item_id                VARCHAR2 (30) PATH ''/Item/ItemID'',
+                                                               seller_item_id         VARCHAR2 (30) PATH ''/Item/SellerItemID'',
+                                                               name                   VARCHAR2 (70) PATH ''/Item/Name'',                                                               
+                                                               unit_of_measure        VARCHAR2 (30) PATH ''/Item/UnitOfMeasure'',                                                               
+                                                               quantity_value         VARCHAR2 (30) PATH ''/Item/QuantityValue'',
+                                                               tax_percent            VARCHAR2 (30) PATH ''/Item/TaxPercent'',
+                                                               unit_price_value       VARCHAR2 (30) PATH ''/Item/UnitPriceValue'',
+                                                               unit_price_base        VARCHAR2 (30) PATH ''/Item/UnitPriceBase'',
+                                                               unit_discount_value    VARCHAR2 (30) PATH ''/Item/UnitDiscountValue'',
+                                                               unit_discount          VARCHAR2 (30) PATH ''/Item/UnitDiscount'',
+                                                               description                  VARCHAR2(500) PATH ''/Item/Description'',
+                                                               promotion_code         VARCHAR2 (500) PATH ''/Item/PromotionCode'',
+                                                               promotion_name         VARCHAR2 (500) PATH ''/Item/PromotionName'') item_xml
+where log1.id = :p_operation_id
+)
+SELECT header.*,
                 sord.guid,
                             TRUNC(TO_DATE(header.order_issue_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS'')) order_issue_date,
                             TRUNC(TO_DATE(header.requested_delivery_date_bc, ''YYYY-MM-DD"T"HH24:MI:SS'')) requested_delivery_date,
@@ -401,9 +426,11 @@ GROUP BY rndo.symbol_dokumentu,
                             pa_firm_sql.kod (wzrc.firm_id) company_code,
                             wzrc.place_of_issue place_of_issue,
                             NVL (wzrc.base_currency, wzrc.currency) currency,
-			    NVL(decode(payment_method_code,''GOT'',0,''POBR'',0,''KARTA'',0,header.payment_date), wzrc.payment_days) payment_days,
+                            NVL(decode(payment_method_code,''GOT'',0,''POBR'',0,''KARTA'',0,header.payment_date), wzrc.payment_days) payment_days,
                             pusp.kod pusp_kod,
-                            NVL(header.net_value * (header.order_discount/ 100), 0) order_discount_value,
+                            (select distinct order_val from item_xml where log_id = log.id)*(order_discount_tmp/100) as ORDER_DISCOUNT_VALUE,
+                            (select distinct case when order_val_bf_disc = 0 then 0 else order_val/order_val_bf_disc end from item_xml where log_id = log.id)*(order_discount_tmp) as ORDER_DISCOUNT,
+                            --NVL(header.net_value * (header.order_discount/ 100), 0) order_discount_value,
                             CURSOR ( SELECT konr.symbol,
                                             konr.nazwa,
                                             konr.skrot,
@@ -429,7 +456,7 @@ GROUP BY rndo.symbol_dokumentu,
                                             adge.poczta
                                        FROM ap_kontrahenci konr, pa_adr_adresy_geograficzne adge
                                       WHERE     adge.id = lg_konr_adresy.adge_id_siedziby (konr.id)
-                                            AND konr.id = (SELECT nvl(odb.platnik_id,odb.id) from ap_kontrahenci odb where odb.symbol = header.seller_buyer_id))  platnik,					    
+                                            AND konr.id = (SELECT nvl(odb.platnik_id,odb.id) from ap_kontrahenci odb where odb.symbol = header.seller_buyer_id))  platnik,
                             CURSOR ( SELECT konr.symbol,
                                             konr.nazwa,
                                             konr.skrot,
@@ -450,26 +477,10 @@ GROUP BY rndo.symbol_dokumentu,
                                             inma.jdmr_nazwa_pdst_sp jdmr_nazwa,
                                             api_rk_stva.kod (inma.stva_id) inma_stva_code,
                                             NVL (wzrc.base_currency, wzrc.currency) currency
-                                       FROM jg_input_log log1,
+                                       FROM item_xml,
                                             ap_indeksy_materialowe inma,
-                                            XMLTABLE ( ''//Order/OrderDetail/Item''
-                                                       PASSING xmltype (log1.xml)
-                                                       COLUMNS item_num               VARCHAR2 (30) PATH ''/Item/ItemNum'',
-						               item_id                VARCHAR2 (30) PATH ''/Item/ItemID'',
-                                                               seller_item_id         VARCHAR2 (30) PATH ''/Item/SellerItemID'',
-                                                               name                   VARCHAR2 (70) PATH ''/Item/Name'',                                                               
-                                                               unit_of_measure        VARCHAR2 (30) PATH ''/Item/UnitOfMeasure'',                                                               
-                                                               quantity_value         VARCHAR2 (30) PATH ''/Item/QuantityValue'',
-                                                               tax_percent            VARCHAR2 (30) PATH ''/Item/TaxPercent'',
-                                                               unit_price_value       VARCHAR2 (30) PATH ''/Item/UnitPriceValue'',
-                                                               unit_price_base        VARCHAR2 (30) PATH ''/Item/UnitPriceBase'',
-                                                               unit_discount_value    VARCHAR2 (30) PATH ''/Item/UnitDiscountValue'',
-                                                               unit_discount          VARCHAR2 (30) PATH ''/Item/UnitDiscount'',
-                                                               description                  VARCHAR2(500) PATH ''/Item/Description'',
-                                                               promotion_code         VARCHAR2 (500) PATH ''/Item/PromotionCode'',
-                                                               promotion_name         VARCHAR2 (500) PATH ''/Item/PromotionName'') item_xml,
                                             lg_sal_orders_it sori                                                           
-                                      WHERE     log1.id = LOG.id
+                                      WHERE     item_xml.log_id = LOG.id
                                             AND inma.indeks = item_xml.seller_item_id
                                             AND (    sori.document_id (+) = sord.id
                                                  AND sori.n_01 (+) = item_xml.item_id)) items
@@ -483,10 +494,10 @@ GROUP BY rndo.symbol_dokumentu,
                                               order_type                              VARCHAR2 (1)       PATH ''/Order/OrderHeader/OrderType'',
                                               order_issue_date_bc              VARCHAR2 (30)      PATH ''/Order/OrderHeader/OrderIssueDate'',
                                               requested_delivery_date_bc  VARCHAR2 (30)      PATH ''/Order/OrderHeader/RequestedDeliveryDate'',
-					      contract_id                              VARCHAR2 (10)     PATH ''/Order/OrderHeader/ContractID'',
+                                              contract_id                              VARCHAR2 (30)     PATH ''/Order/OrderHeader/ContractID'',
                                               note                                         VARCHAR2 (100)     PATH ''/Order/OrderHeader/Comment'',
                                               payment_date                         VARCHAR2(30)     PATH ''/Order/OrderHeader/PaymentDate'',
-                                              order_discount                        VARCHAR2 (5)       PATH ''/Order/OrderHeader/OrderDiscount'',                                               
+                                              order_discount_tmp                        VARCHAR2 (5)       PATH ''/Order/OrderHeader/OrderDiscount'',                                               
                                               payment_method_code          VARCHAR2 (6)       PATH ''/Order/OrderHeader/PaymentMethod/Code'',
                                               transportation_code               VARCHAR2 (3)       PATH ''/Order/OrderHeader/Transportation/Code'',                                               
                                               seller_buyer_id                       VARCHAR2 (30)      PATH ''/Order/OrderParty/BuyerParty/SellerBuyerID'',
